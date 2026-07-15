@@ -1,0 +1,47 @@
+# Environment files
+.env
+*.env.local
+
+# Dependencies
+node_modules/
+vendor/
+
+# Build outputs
+dist/
+build/
+frontend/dist/
+
+# Go binaries
+backend/smart-parking
+*.exe
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+ocr-service/venv/
+*.egg-info/
+
+# Database
+*.dump
+*.sql.bak
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temp uploads
+uploads/
+temp/
