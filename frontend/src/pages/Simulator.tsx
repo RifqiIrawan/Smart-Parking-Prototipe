@@ -166,9 +166,10 @@ const QRISModal: React.FC<{
     return () => clearInterval(t);
   }, []);
 
-  // Poll payment status every 3 seconds
+  // Poll payment status every 3 seconds (skip mock/demo orders)
   useEffect(() => {
     if (status === 'paid') return;
+    if (payment.order_id.startsWith('SP-DEMO') || !payment.use_midtrans) return; // skip mock
 
     pollRef.current = setInterval(async () => {
       try {
@@ -182,7 +183,7 @@ const QRISModal: React.FC<{
     }, 3000);
 
     return () => clearInterval(pollRef.current!);
-  }, [payment.order_id, status]);
+  }, [payment.order_id, payment.use_midtrans, status]);
 
   const handleSimulate = async () => {
     setStatus('simulating');
@@ -398,14 +399,21 @@ export const Simulator: React.FC = () => {
     onMessage: (topic, payload) => {
       // Parse gate status from ESP32
       if (topic.includes('/status')) {
-        const gateId = (payload.gate_id as string) || topic.split('/')[2];
+        const mqttGateId = (payload.gate_id as string) || topic.split('/')[2];
         const isOpen = payload.status === 'open';
         const angle = (payload.angle as number) ?? (isOpen ? 90 : 0);
 
-        setGateStates(prev => ({ ...prev, [gateId]: { open: isOpen, angle } }));
-        // Also sync with DB gate id
+        // Update by MQTT gate_id directly (could be UUID or custom like "gate-simulator-001")
+        setGateStates(prev => ({ ...prev, [mqttGateId]: { open: isOpen, angle } }));
+
+        // Also try to sync DB gates: match by id prefix OR by mqtt_gate_id field
         setGates(prev => {
-          const match = prev.find(g => g.id.includes(gateId) || gateId.includes(g.id.slice(0, 8)));
+          // Find gate whose UUID starts with mqttGateId, or mqttGateId starts with gate UUID prefix
+          const match = prev.find(g =>
+            g.id === mqttGateId ||
+            g.id.startsWith(mqttGateId) ||
+            mqttGateId.startsWith(g.id.slice(0, 8))
+          );
           if (match) {
             setGateStates(gs => ({ ...gs, [match.id]: { open: isOpen, angle } }));
           }

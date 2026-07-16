@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/RifqiIrawan/smart-parking/backend/config"
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
 )
@@ -28,21 +29,17 @@ func (h *VehicleHandler) Entry(c *gin.Context) {
 	var req models.VehicleEntryRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Message: "Data tidak valid",
-			Error:   err.Error(),
+			Success: false, Message: "Data tidak valid", Error: err.Error(),
 		})
 		return
 	}
 
-	// Check for duplicate active transaction
+	// Check duplicate active transaction
 	var existingID string
 	err := h.DB.QueryRow(`
 		SELECT id FROM parking_transactions
-		WHERE plate_number = $1 AND status = 'active'
-		LIMIT 1
+		WHERE plate_number = $1 AND status = 'active' LIMIT 1
 	`, req.PlateNumber).Scan(&existingID)
-
 	if err == nil {
 		c.JSON(http.StatusConflict, models.APIResponse{
 			Success: false,
@@ -51,12 +48,12 @@ func (h *VehicleHandler) Entry(c *gin.Context) {
 		return
 	}
 
-	// Get or create vehicle
 	vehicleType := req.VehicleType
 	if vehicleType == "" {
 		vehicleType = "car"
 	}
 
+	// Upsert vehicle
 	var vehicleID string
 	err = h.DB.QueryRow(`
 		INSERT INTO vehicles (plate_number, type)
@@ -64,12 +61,9 @@ func (h *VehicleHandler) Entry(c *gin.Context) {
 		ON CONFLICT (plate_number) DO UPDATE SET updated_at = NOW()
 		RETURNING id
 	`, req.PlateNumber, vehicleType).Scan(&vehicleID)
-
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Gagal mendaftarkan kendaraan",
-			Error:   err.Error(),
+			Success: false, Message: "Gagal mendaftarkan kendaraan", Error: err.Error(),
 		})
 		return
 	}
@@ -80,7 +74,7 @@ func (h *VehicleHandler) Entry(c *gin.Context) {
 		SELECT first_hour_rate FROM tariffs WHERE vehicle_type = $1 AND is_active = true LIMIT 1
 	`, vehicleType).Scan(&baseRate)
 
-	// Auto-assign slot if not provided
+	// Auto-assign slot
 	slotID := req.SlotID
 	if slotID == "" {
 		slotType := "regular"
@@ -98,47 +92,53 @@ func (h *VehicleHandler) Entry(c *gin.Context) {
 	ticketNumber := generateTicketNumber()
 	operatorID := c.GetString("user_id")
 
-	var tx models.ParkingTransaction
-	var gateID *string
+	var gateIDPtr *string
 	if req.GateID != "" {
-		gateID = &req.GateID
+		gateIDPtr = &req.GateID
 	}
 	var slotIDPtr *string
 	if slotID != "" {
 		slotIDPtr = &slotID
 	}
 
-	query := `
+	var tx models.ParkingTransaction
+	err = h.DB.QueryRow(`
 		INSERT INTO parking_transactions
 		(ticket_number, vehicle_id, slot_id, entry_gate_id, plate_number, plate_image_in, base_rate, status, operator_id)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8)
 		RETURNING id, ticket_number, entry_time, status
-	`
-	err = h.DB.QueryRow(query,
-		ticketNumber, vehicleID, slotIDPtr, gateID,
+	`, ticketNumber, vehicleID, slotIDPtr, gateIDPtr,
 		req.PlateNumber, req.PlateImage, baseRate, operatorID,
 	).Scan(&tx.ID, &tx.TicketNumber, &tx.EntryTime, &tx.Status)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Gagal membuat transaksi",
-			Error:   err.Error(),
+			Success: false, Message: "Gagal membuat transaksi", Error: err.Error(),
 		})
 		return
 	}
 
 	// Update slot status
 	if slotID != "" {
-		h.DB.Exec(`UPDATE parking_slots SET status = 'occupied' WHERE id = $1`, slotID)
+		h.DB.Exec(`UPDATE parking_slots SET status='occupied' WHERE id=$1`, slotID)
 	}
 
-	// Trigger gate open (send to gate controller)
+	// FIX: Open entry gate via MQTT (not just DB update)
 	if req.GateID != "" {
-		h.DB.Exec(`UPDATE gates SET status = 'open' WHERE id = $1`, req.GateID)
+		var gateName string
+		h.DB.QueryRow(`SELECT name FROM gates WHERE id=$1`, req.GateID).Scan(&gateName)
+		h.DB.Exec(`UPDATE gates SET status='open', updated_at=NOW() WHERE id=$1`, req.GateID)
+
+		// Publish MQTT command to ESP32
+		go config.PublishGateCommand(req.GateID, gateName, "open")
+
+		// Auto-close after 8s
+		gateIDCopy := req.GateID
+		gateNameCopy := gateName
 		go func() {
-			time.Sleep(5 * time.Second)
-			h.DB.Exec(`UPDATE gates SET status = 'closed' WHERE id = $1`, req.GateID)
+			time.Sleep(8 * time.Second)
+			h.DB.Exec(`UPDATE gates SET status='closed', updated_at=NOW() WHERE id=$1`, gateIDCopy)
+			config.PublishGateCommand(gateIDCopy, gateNameCopy, "close")
 		}()
 	}
 
@@ -156,9 +156,7 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 	var req models.VehicleExitRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Message: "Data tidak valid",
-			Error:   err.Error(),
+			Success: false, Message: "Data tidak valid", Error: err.Error(),
 		})
 		return
 	}
@@ -166,6 +164,7 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 	// Find active transaction
 	var tx models.ParkingTransaction
 	var slotID *string
+	var vehicleType string
 	err := h.DB.QueryRow(`
 		SELECT t.id, t.ticket_number, t.vehicle_id, t.slot_id, t.entry_time,
 		       t.plate_number, t.base_rate, t.status,
@@ -176,35 +175,28 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 	`, req.TicketNumber).Scan(
 		&tx.ID, &tx.TicketNumber, &tx.VehicleID, &slotID,
 		&tx.EntryTime, &tx.PlateNumber, &tx.BaseRate, &tx.Status,
-		new(string),
+		&vehicleType,
 	)
 
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, models.APIResponse{
-			Success: false,
-			Message: "Tiket tidak ditemukan atau sudah selesai",
+			Success: false, Message: "Tiket tidak ditemukan atau sudah selesai",
 		})
 		return
 	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Database error",
-			Error:   err.Error(),
+			Success: false, Message: "Database error", Error: err.Error(),
 		})
 		return
 	}
 
-	// Calculate duration and fee
+	// Calculate fee
 	exitTime := time.Now()
 	durationMinutes := int(exitTime.Sub(tx.EntryTime).Minutes())
 	if durationMinutes < 1 {
 		durationMinutes = 1
 	}
-
-	// Get tariff
-	var vehicleType string
-	h.DB.QueryRow(`SELECT COALESCE(v.type, 'car') FROM vehicles v JOIN parking_transactions t ON t.vehicle_id = v.id WHERE t.id = $1`, tx.ID).Scan(&vehicleType)
 
 	var tariff models.Tariff
 	h.DB.QueryRow(`
@@ -218,7 +210,6 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 		tariff.MaxDailyRate = 50000
 	}
 
-	// Calculate fee: first hour + subsequent hours
 	hours := math.Ceil(float64(durationMinutes) / 60.0)
 	totalAmount := tariff.FirstHourRate
 	if hours > 1 {
@@ -228,31 +219,29 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 		totalAmount = tariff.MaxDailyRate
 	}
 
-	// Update transaction
-	var gateID *string
+	// Mark transaction completed (status pending payment, gate opens after payment)
+	var gateIDPtr *string
 	if req.GateID != "" {
-		gateID = &req.GateID
+		gateIDPtr = &req.GateID
 	}
 
 	_, err = h.DB.Exec(`
 		UPDATE parking_transactions
-		SET exit_time = $1, duration_minutes = $2, total_amount = $3,
-		    status = 'completed', exit_gate_id = $4, plate_image_out = $5, updated_at = NOW()
-		WHERE id = $6
-	`, exitTime, durationMinutes, totalAmount, gateID, req.PlateImage, tx.ID)
+		SET exit_time=$1, duration_minutes=$2, total_amount=$3,
+		    status='completed', exit_gate_id=$4, plate_image_out=$5, updated_at=NOW()
+		WHERE id=$6
+	`, exitTime, durationMinutes, totalAmount, gateIDPtr, req.PlateImage, tx.ID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Gagal memproses keluar",
-			Error:   err.Error(),
+			Success: false, Message: "Gagal memproses keluar", Error: err.Error(),
 		})
 		return
 	}
 
 	// Free the slot
 	if slotID != nil {
-		h.DB.Exec(`UPDATE parking_slots SET status = 'available' WHERE id = $1`, *slotID)
+		h.DB.Exec(`UPDATE parking_slots SET status='available' WHERE id=$1`, *slotID)
 	}
 
 	tx.ExitTime = &exitTime
@@ -290,22 +279,17 @@ func (h *VehicleHandler) ListTransactions(c *gin.Context) {
 	`
 	args := []interface{}{}
 	argIdx := 1
-
 	if status != "" {
 		query += fmt.Sprintf(" WHERE t.status = $%d", argIdx)
 		args = append(args, status)
 		argIdx++
 	}
-
 	query += fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, limit, offset)
 
 	rows, err := h.DB.Query(query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Message: "Failed to fetch transactions",
-		})
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Failed to fetch transactions"})
 		return
 	}
 	defer rows.Close()
@@ -321,15 +305,11 @@ func (h *VehicleHandler) ListTransactions(c *gin.Context) {
 		transactions = append(transactions, tx)
 	}
 
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Data:    transactions,
-	})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: transactions})
 }
 
 func (h *VehicleHandler) GetTransaction(c *gin.Context) {
 	id := c.Param("id")
-
 	var tx models.ParkingTransaction
 	err := h.DB.QueryRow(`
 		SELECT t.id, t.ticket_number, t.plate_number, t.entry_time, t.exit_time,
@@ -345,17 +325,9 @@ func (h *VehicleHandler) GetTransaction(c *gin.Context) {
 		&tx.DurationMinutes, &tx.TotalAmount, &tx.BaseRate, &tx.Status,
 		&tx.SlotNumber, &tx.EntryGateName, &tx.ExitGateName,
 	)
-
 	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, models.APIResponse{
-			Success: false,
-			Message: "Transaksi tidak ditemukan",
-		})
+		c.JSON(http.StatusNotFound, models.APIResponse{Success: false, Message: "Transaksi tidak ditemukan"})
 		return
 	}
-
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Data:    tx,
-	})
+	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: tx})
 }

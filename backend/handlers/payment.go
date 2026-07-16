@@ -422,19 +422,39 @@ func (h *PaymentHandler) markPaid(paymentID, transactionID, orderID string, amou
 		VALUES ($1, 'PAID', '{"confirmed":true}', 'system')
 	`, paymentID)
 
-	// Publish MQTT event
+	// Publish MQTT payment event
 	go config.PublishPaymentPaid(orderID, amount, method)
 
-	// Auto-open exit gate for this transaction
+	// FIX: Auto-open the correct exit gate from the transaction (exit_gate_id first, fallback to any exit gate)
 	go func() {
 		var gateID, gateName string
+
+		// Try transaction's assigned exit_gate_id first
 		h.DB.QueryRow(`
 			SELECT g.id, g.name FROM parking_transactions pt
-			JOIN gates g ON g.type='exit'
-			WHERE pt.id = $1 LIMIT 1
+			JOIN gates g ON g.id = pt.exit_gate_id
+			WHERE pt.id = $1
 		`, transactionID).Scan(&gateID, &gateName)
+
+		// Fallback: any active exit gate
+		if gateID == "" {
+			h.DB.QueryRow(`
+				SELECT id, name FROM gates WHERE type='exit' AND is_active=true LIMIT 1
+			`).Scan(&gateID, &gateName)
+		}
+
 		if gateID != "" {
+			h.DB.Exec(`UPDATE gates SET status='open', updated_at=NOW() WHERE id=$1`, gateID)
 			config.PublishGateCommand(gateID, gateName, "open")
+
+			// Auto-close gate after 10s
+			gateIDCopy := gateID
+			gateNameCopy := gateName
+			go func() {
+				time.Sleep(10 * time.Second)
+				h.DB.Exec(`UPDATE gates SET status='closed', updated_at=NOW() WHERE id=$1`, gateIDCopy)
+				config.PublishGateCommand(gateIDCopy, gateNameCopy, "close")
+			}()
 		}
 	}()
 }

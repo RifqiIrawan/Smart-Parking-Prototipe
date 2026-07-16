@@ -16,7 +16,6 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	r.Use(gin.Logger())
 	r.Use(gin.Recovery())
 
-	// CORS
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000", "*"},
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -29,18 +28,18 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Smart Parking API is running"})
 	})
 
-	authH := handlers.NewAuthHandler(db)
-	dashH := handlers.NewDashboardHandler(db)
+	authH    := handlers.NewAuthHandler(db)
+	dashH    := handlers.NewDashboardHandler(db)
 	vehicleH := handlers.NewVehicleHandler(db)
-	gateH := handlers.NewGateHandler(db)
+	gateH    := handlers.NewGateHandler(db)
 	paymentH := handlers.NewPaymentHandler(db)
-	userH := handlers.NewUserHandler(db)
+	userH    := handlers.NewUserHandler(db)
 
-	// Public routes
+	// ── Public ──
 	r.POST("/api/login", authH.Login)
 	r.POST("/api/payment/callback", paymentH.Callback)
 
-	// Protected routes
+	// ── Protected ──
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware())
 	{
@@ -65,11 +64,11 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		api.POST("/gate/open", gateH.ControlGate)
 		api.POST("/gate/close", gateH.ControlGate)
 
-		// Payments
+		// ── Payments: specific routes BEFORE wildcard /:id ──
 		api.POST("/payment/create", paymentH.CreatePayment)
-		api.GET("/payment/:id", paymentH.GetPayment)
-		api.GET("/payment/status/:order_id", paymentH.CheckPaymentStatus) // polling
 		api.POST("/payment/simulate/:order_id", paymentH.SimulatePayment)
+		api.GET("/payment/status/:order_id", paymentH.CheckPaymentStatus) // FIX: must be before /:id
+		api.GET("/payment/:id", paymentH.GetPayment)                      // wildcard last
 
 		// Users & Roles
 		api.GET("/users", middleware.RequireRole("admin"), userH.ListUsers)

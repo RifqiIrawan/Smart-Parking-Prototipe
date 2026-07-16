@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import mqtt from 'mqtt';
 
-// Use mqtt.MqttClient from the default export namespace
 type MqttClientType = InstanceType<typeof mqtt.MqttClient>;
 
 export interface MQTTMessage {
@@ -24,7 +23,7 @@ export interface UseMQTTOptions {
   enabled?: boolean;
 }
 
-const DEFAULT_BROKER = 'ws://localhost:9001';
+const DEFAULT_BROKER  = 'ws://localhost:9001';
 const FALLBACK_BROKER = 'wss://broker.hivemq.com:8884/mqtt';
 
 export function useMQTT({
@@ -33,18 +32,19 @@ export function useMQTT({
   onMessage,
   enabled = true,
 }: UseMQTTOptions = {}) {
-  const clientRef = useRef<MqttClientType | null>(null);
-  const [status, setStatus] = useState<MQTTStatus>({
-    connected: false,
-    connecting: false,
-    error: null,
-    broker,
-  });
-  const [messages, setMessages] = useState<MQTTMessage[]>([]);
-  const onMessageRef = useRef(onMessage);
+  const clientRef    = useRef<MqttClientType | null>(null);
+  const topicsRef    = useRef(topics);    // FIX: stable ref — avoid infinite reconnect
+  const onMessageRef = useRef(onMessage); // FIX: stable ref — avoid re-subscribe
+  topicsRef.current    = topics;
   onMessageRef.current = onMessage;
 
-  const addMessage = useCallback((topic: string, rawPayload: Buffer) => {
+  const [status, setStatus] = useState<MQTTStatus>({
+    connected: false, connecting: false, error: null, broker,
+  });
+  const [messages, setMessages] = useState<MQTTMessage[]>([]);
+
+  // Stable message handler using ref
+  const handleMessage = useCallback((topic: string, rawPayload: Buffer) => {
     try {
       const payload = JSON.parse(rawPayload.toString()) as Record<string, unknown>;
       const msg: MQTTMessage = { topic, payload, timestamp: new Date() };
@@ -53,55 +53,48 @@ export function useMQTT({
     } catch {
       // ignore non-JSON
     }
-  }, []);
+  }, []); // no deps — uses ref
 
-  const connect = useCallback((brokerUrl: string, isFallback = false) => {
-    if (clientRef.current) {
-      clientRef.current.end(true);
-      clientRef.current = null;
-    }
+  const connectTo = useCallback((brokerUrl: string, isFallback = false) => {
+    clientRef.current?.end(true);
+    clientRef.current = null;
 
     setStatus(s => ({ ...s, connecting: true, error: null, broker: brokerUrl }));
 
     const client = mqtt.connect(brokerUrl, {
-      clientId: `smart-parking-ui-${Math.random().toString(16).slice(2, 8)}`,
+      clientId: `sp-ui-${Math.random().toString(16).slice(2, 8)}`,
       clean: true,
-      reconnectPeriod: isFallback ? 10000 : 5000,
+      reconnectPeriod: 10000,
       connectTimeout: 8000,
     });
 
     client.on('connect', () => {
       setStatus({ connected: true, connecting: false, error: null, broker: brokerUrl });
-      if (topics.length > 0) {
-        client.subscribe(topics, { qos: 1 });
-      }
+      const t = topicsRef.current;
+      if (t.length > 0) client.subscribe(t, { qos: 1 });
     });
 
     client.on('error', (err) => {
       setStatus(s => ({ ...s, connecting: false, error: err.message }));
       if (!isFallback) {
         client.end(true);
-        setTimeout(() => connect(FALLBACK_BROKER, true), 1000);
+        setTimeout(() => connectTo(FALLBACK_BROKER, true), 500);
       }
     });
 
-    client.on('offline', () => {
-      setStatus(s => ({ ...s, connected: false }));
-    });
+    client.on('offline', () => setStatus(s => ({ ...s, connected: false })));
+    client.on('reconnect', () => setStatus(s => ({ ...s, connecting: true })));
+    client.on('message', handleMessage);
 
-    client.on('reconnect', () => {
-      setStatus(s => ({ ...s, connecting: true }));
-    });
-
-    client.on('message', addMessage);
     clientRef.current = client;
-  }, [topics, addMessage]);
+  }, [handleMessage]); // FIX: only depends on stable handleMessage
 
   useEffect(() => {
     if (!enabled) return;
-    connect(broker);
+    connectTo(broker);
     return () => { clientRef.current?.end(true); };
-  }, [enabled, connect, broker]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enabled]); // FIX: only re-run when enabled changes, not on every broker/topics change
 
   const subscribe = useCallback((topic: string | string[]) => {
     clientRef.current?.subscribe(topic, { qos: 1 });
@@ -118,8 +111,7 @@ export function useMQTT({
   }, []);
 
   const clearMessages = useCallback(() => setMessages([]), []);
-
-  const reconnect = useCallback(() => connect(DEFAULT_BROKER), [connect]);
+  const reconnect     = useCallback(() => connectTo(DEFAULT_BROKER), [connectTo]);
 
   return { status, messages, publish, subscribe, unsubscribe, clearMessages, reconnect };
 }
