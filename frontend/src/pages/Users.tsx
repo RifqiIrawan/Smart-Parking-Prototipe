@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { getUsers, createUser, deleteUser, getRoles } from '../api/client';
-import { User } from '../types';
+import type { User } from '../types';
 import { UserPlus, Trash2, RefreshCw, X, CheckCircle } from 'lucide-react';
 
 export const UsersPage: React.FC = () => {
@@ -54,8 +53,8 @@ export const UsersPage: React.FC = () => {
   };
 
   return (
-    <Layout title="Manajemen User">
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem', gap: 8 }}>
+    <>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1.5rem', gap: 8 }}>
         <button className="btn btn-secondary btn-sm" onClick={fetchData}>
           <RefreshCw size={14} /> Refresh
         </button>
@@ -166,6 +165,6 @@ export const UsersPage: React.FC = () => {
           </div>
         </div>
       )}
-    </Layout>
+    </>
   );
 };

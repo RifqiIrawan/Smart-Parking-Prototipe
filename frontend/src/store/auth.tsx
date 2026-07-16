@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { User } from '../types';
+import React, { createContext, useContext, useState } from 'react';
+import type { User } from '../types';
 
 interface AuthContextType {
   user: User | null;
@@ -14,8 +14,7 @@ const AuthContext = createContext<AuthContextType>({
   token: null,
   isAuthenticated: false,
   setAuth: () => {},
-  logout: () => {},
-});
+  logout: () => {} });
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/RifqiIrawan/smart-parking/backend/config"
 	"github.com/RifqiIrawan/smart-parking/backend/routes"
@@ -10,28 +9,28 @@ import (
 )
 
 func main() {
-	// Load .env file
+	// Load environment
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using system environment variables")
+		log.Println("No .env file found, using system environment")
 	}
 
-	// Initialize database
-	db, err := config.InitDB()
-	if err != nil {
-		log.Fatalf("Failed to connect to database: %v", err)
-	}
+	// Connect to database
+	db := config.InitDB()
 	defer db.Close()
 
-	// Setup router
-	r := routes.SetupRouter(db)
-
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8080"
+	// Connect to MQTT broker
+	mqttClient := config.InitMQTT()
+	if mqttClient != nil && mqttClient.IsConnected() {
+		log.Println("MQTT broker connected ✓")
+		defer mqttClient.Disconnect(250)
+	} else {
+		log.Println("MQTT broker not connected (hardware control disabled)")
 	}
 
-	log.Printf("🚀 Smart Parking Backend running on port %s", port)
-	if err := r.Run(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	// Start HTTP server
+	r := routes.SetupRouter(db)
+	log.Println("Smart Parking API starting on :8080")
+	if err := r.Run(":8080"); err != nil {
+		log.Fatal("Server failed:", err)
 	}
 }

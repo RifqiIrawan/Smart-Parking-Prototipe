@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Car, LogOut as LogOutIcon, DoorOpen,
-  Receipt, Users, Settings, BarChart3, ParkingSquare, LogIn
+  Receipt, Users, BarChart3, ParkingSquare, LogIn, Zap
 } from 'lucide-react';
 import { useAuth } from '../store/auth';
 
@@ -17,6 +17,8 @@ const navItems = [
   { to: '/users', icon: Users, label: 'Manajemen User' },
 ];
 
+const simulatorItem = { to: '/simulator', icon: Zap, label: 'Simulator' };
+
 export const Sidebar: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -25,6 +27,20 @@ export const Sidebar: React.FC = () => {
     logout();
     navigate('/login');
   };
+
+  const linkStyle = (isActive: boolean): React.CSSProperties => ({
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '0.6rem 1rem',
+    borderRadius: 8,
+    color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
+    background: isActive ? 'var(--accent-cyan-10)' : 'transparent',
+    fontWeight: isActive ? 600 : 400,
+    fontSize: 13,
+    textDecoration: 'none',
+    transition: 'all 0.15s',
+  });
 
   return (
     <aside style={{
@@ -62,72 +78,64 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '1rem 0.75rem', display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {navItems.map(({ to, icon: Icon, label }) => (
-          <NavLink
-            key={to}
-            to={to}
-            style={({ isActive }) => ({
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              padding: '10px 12px',
-              borderRadius: 10,
-              textDecoration: 'none',
-              fontSize: 14,
-              fontWeight: 500,
-              transition: 'all 0.15s',
-              background: isActive ? 'rgba(56,189,248,0.1)' : 'transparent',
-              color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-              border: isActive ? '1px solid rgba(56,189,248,0.2)' : '1px solid transparent',
-            })}
-          >
-            <Icon size={18} />
-            {label}
+      <nav style={{ flex: 1, padding: '0.75rem', overflowY: 'auto' }}>
+        <div style={{ marginBottom: '1rem' }}>
+          {navItems.map(({ to, icon: Icon, label }) => (
+            <NavLink key={to} to={to} style={({ isActive }) => linkStyle(isActive)}>
+              <Icon size={16} />
+              {label}
+            </NavLink>
+          ))}
+        </div>
+
+        {/* Divider */}
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
+          <div style={{ fontSize: 10, color: '#475569', padding: '0 0.5rem', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>
+            Simulator
+          </div>
+          <NavLink to={simulatorItem.to} style={({ isActive }) => ({
+            ...linkStyle(isActive),
+            background: isActive ? '#38bdf820' : '#38bdf808',
+            color: isActive ? 'var(--accent-cyan)' : '#94a3b8',
+            border: `1px solid ${isActive ? '#38bdf840' : '#38bdf815'}`,
+          })}>
+            <simulatorItem.icon size={16} />
+            {simulatorItem.label}
+            <span style={{
+              marginLeft: 'auto', fontSize: 9, background: '#38bdf820',
+              color: '#38bdf8', padding: '1px 5px', borderRadius: 3,
+            }}>MQTT</span>
           </NavLink>
-        ))}
+        </div>
       </nav>
 
       {/* User info */}
-      <div style={{ padding: '1rem 0.75rem', borderTop: '1px solid var(--border)' }}>
-        <div style={{
-          background: 'var(--bg-card)',
-          borderRadius: 10,
-          padding: '12px',
-          marginBottom: 8,
-        }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{user?.name}</div>
-          <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            {user?.role_name}
+      <div style={{ padding: '1rem', borderTop: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <div style={{
+            width: 32, height: 32, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 700, color: '#0a0e1a',
+          }}>
+            {user?.name?.[0]?.toUpperCase() || 'A'}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {user?.name || 'Admin'}
+            </div>
+            <div style={{ fontSize: 10, color: '#64748b' }}>{user?.role_name || 'admin'}</div>
           </div>
         </div>
         <button
           onClick={handleLogout}
           style={{
-            width: '100%',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '10px 12px',
-            borderRadius: 10,
-            background: 'transparent',
-            border: '1px solid var(--border)',
-            color: 'var(--text-secondary)',
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 500,
-            transition: 'all 0.15s',
-          }}
-          onMouseOver={e => {
-            (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent-red)';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = 'rgba(239,68,68,0.3)';
-          }}
-          onMouseOut={e => {
-            (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)';
-            (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+            padding: '0.5rem 0.75rem', borderRadius: 6, border: 'none',
+            background: '#ef444415', color: '#ef4444', cursor: 'pointer', fontSize: 12,
           }}
         >
-          <LogOutIcon size={16} />
+          <LogOutIcon size={14} />
           Logout
         </button>
       </div>

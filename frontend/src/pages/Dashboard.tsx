@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Layout } from '../components/Layout';
 import { getDashboardStats, getRevenueChart, getSlotMap } from '../api/client';
-import { DashboardStats, RevenuePoint, ParkingSlot } from '../types';
+import type { DashboardStats, RevenuePoint, ParkingSlot } from '../types';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import {
   Car, ParkingSquare, Activity, TrendingUp,
@@ -59,8 +58,8 @@ export const DashboardPage: React.FC = () => {
   };
 
   return (
-    <Layout>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
+    <>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem' }}>
         <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 22 }}>Dashboard</h1>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -118,7 +117,7 @@ export const DashboardPage: React.FC = () => {
                     <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${v/1000}k`} />
                     <Tooltip
                       contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-accent)', borderRadius: 10, fontSize: 12 }}
-                      formatter={(v: number) => [formatRp(v), 'Revenue']}
+                      formatter={(v: unknown) => [`Rp ${Number(v || 0).toLocaleString('id-ID')}`, 'Pendapatan']}
                     />
                     <Area type="monotone" dataKey="revenue" stroke="#38bdf8" strokeWidth={2} fill="url(#revenueGrad)" />
                   </AreaChart>
@@ -216,6 +215,6 @@ export const DashboardPage: React.FC = () => {
           </div>
         </>
       )}
-    </Layout>
+    </>
   );
 };

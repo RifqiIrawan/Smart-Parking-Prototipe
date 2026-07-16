@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { getReports } from '../api/client';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { BarChart3, TrendingUp, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 
 const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 
@@ -37,8 +36,8 @@ export const ReportsPage: React.FC = () => {
   const avgRevenue = data.length > 0 ? totalRevenue / data.length : 0;
 
   return (
-    <Layout title="Laporan & Statistik">
-      {/* Period Toggle */}
+    <>
+          {/* Period Toggle */}
       <div style={{ display: 'flex', gap: 8, marginBottom: '1.5rem' }}>
         {(['daily', 'monthly'] as const).map(p => (
           <button
@@ -90,7 +89,7 @@ export const ReportsPage: React.FC = () => {
                 <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `${v/1000}k`} />
                 <Tooltip
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-accent)', borderRadius: 10, fontSize: 12 }}
-                  formatter={(v: number) => [formatRp(v), 'Pendapatan']}
+                  formatter={(v: unknown) => [`Rp ${Number(v || 0).toLocaleString('id-ID')}`, 'Pendapatan']}
                 />
                 <Bar dataKey="revenue" fill="var(--accent-cyan)" radius={[4, 4, 0, 0]} opacity={0.85} />
               </BarChart>
@@ -126,6 +125,6 @@ export const ReportsPage: React.FC = () => {
           </div>
         </>
       )}
-    </Layout>
+    </>
   );
 };

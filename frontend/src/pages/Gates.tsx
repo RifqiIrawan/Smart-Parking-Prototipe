@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { getGates, controlGate } from '../api/client';
-import { Gate } from '../types';
-import { DoorOpen, DoorClosed, RefreshCw, Activity, Wifi, WifiOff } from 'lucide-react';
+import type { Gate } from '../types';
+import { DoorOpen, DoorClosed, RefreshCw, Wifi, WifiOff } from 'lucide-react';
 
 export const GatesPage: React.FC = () => {
   const [gates, setGates] = useState<Gate[]>([]);
@@ -41,15 +40,14 @@ export const GatesPage: React.FC = () => {
   const statusColor: Record<string, string> = {
     open: 'var(--accent-green)',
     closed: 'var(--accent-red)',
-    error: 'var(--accent-amber)',
-  };
+    error: 'var(--accent-amber)' };
 
   const entryGates = gates.filter(g => g.type === 'entry');
   const exitGates = gates.filter(g => g.type === 'exit');
 
   return (
-    <Layout title="Monitoring Gate">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+    <>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <div className="badge badge-green">
             <span style={{ width: 6, height: 6, background: 'var(--accent-green)', borderRadius: '50%', animation: 'pulse-dot 2s infinite' }} />
@@ -71,9 +69,9 @@ export const GatesPage: React.FC = () => {
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1.5rem' }}>
           {[
-            { label: 'Gate Masuk (Entry)', gates: entryGates, accentColor: 'var(--accent-green)' },
+            { label: 'Gate Masuk (Entry)', gates: entryGates, accentColor: 'var(--accent-green)' as const },
             { label: 'Gate Keluar (Exit)', gates: exitGates, accentColor: 'var(--accent-red)' },
-          ].map(({ label, gates: gList, accentColor }) => (
+          ].map(({ label, gates: gList, accentColor: _accentColor }) => (
             <div key={label}>
               <h2 style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: '1rem' }}>
                 {label}
@@ -97,8 +95,7 @@ export const GatesPage: React.FC = () => {
                       <div style={{
                         display: 'flex', alignItems: 'center', gap: 6,
                         fontSize: 12, fontWeight: 700, color: statusColor[gate.status],
-                        textTransform: 'uppercase', letterSpacing: 0.5,
-                      }}>
+                        textTransform: 'uppercase', letterSpacing: 0.5 }}>
                         {gate.status === 'open' ? <DoorOpen size={16} /> : <DoorClosed size={16} />}
                         {gate.status}
                       </div>
@@ -136,6 +133,6 @@ export const GatesPage: React.FC = () => {
           ))}
         </div>
       )}
-    </Layout>
+    </>
   );
 };

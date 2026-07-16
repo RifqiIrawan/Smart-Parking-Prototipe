@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { getSlots } from '../api/client';
-import { ParkingSlot } from '../types';
-import { ParkingSquare, RefreshCw, Filter } from 'lucide-react';
+import type { ParkingSlot } from '../types';
+import { ParkingSquare, RefreshCw } from 'lucide-react';
 
 export const SlotsPage: React.FC = () => {
   const [slots, setSlots] = useState<ParkingSlot[]>([]);
@@ -29,15 +28,13 @@ export const SlotsPage: React.FC = () => {
     available: '#22c55e',
     occupied: '#ef4444',
     reserved: '#f59e0b',
-    maintenance: '#6b7280',
-  };
+    maintenance: '#6b7280' };
 
   const statusBg: Record<string, string> = {
     available: 'rgba(34,197,94,0.08)',
     occupied: 'rgba(239,68,68,0.08)',
     reserved: 'rgba(245,158,11,0.08)',
-    maintenance: 'rgba(107,114,128,0.08)',
-  };
+    maintenance: 'rgba(107,114,128,0.08)' };
 
   const zones = [...new Set(slots.map(s => s.zone))].sort();
   const total = slots.length;
@@ -45,8 +42,8 @@ export const SlotsPage: React.FC = () => {
   const occupied = slots.filter(s => s.status === 'occupied').length;
 
   return (
-    <Layout title="Manajemen Slot Parkir">
-      {/* Summary */}
+    <>
+          {/* Summary */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
         {[
           { label: 'Total Slot', val: total, color: 'var(--accent-blue)' },
@@ -123,8 +120,7 @@ export const SlotsPage: React.FC = () => {
                     display: 'flex', flexDirection: 'column',
                     alignItems: 'center', justifyContent: 'center', gap: 2,
                     cursor: 'default',
-                    transition: 'all 0.15s',
-                  }}
+                    transition: 'all 0.15s' }}
                   onMouseOver={e => {
                     (e.currentTarget as HTMLDivElement).style.transform = 'scale(1.08)';
                     (e.currentTarget as HTMLDivElement).style.borderColor = statusColor[slot.status];
@@ -172,8 +168,7 @@ export const SlotsPage: React.FC = () => {
                       fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: statusBg[slot.status],
                       color: statusColor[slot.status],
-                      border: `1px solid ${statusColor[slot.status]}40`,
-                    }}>
+                      border: `1px solid ${statusColor[slot.status]}40` }}>
                       {slot.status}
                     </span>
                   </td>
@@ -183,6 +178,6 @@ export const SlotsPage: React.FC = () => {
           </table>
         </div>
       )}
-    </Layout>
+    </>
   );
 };

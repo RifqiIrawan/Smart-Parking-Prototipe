@@ -1,22 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { getTransactions } from '../api/client';
-import { Transaction } from '../types';
-import { Receipt, Search, RefreshCw } from 'lucide-react';
+import type { Transaction } from '../types';
+import { Search, RefreshCw } from 'lucide-react';
 
 const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 
 const statusBadge: Record<string, string> = {
   active: 'badge badge-amber',
   completed: 'badge badge-green',
-  cancelled: 'badge badge-gray',
-};
+  cancelled: 'badge badge-gray' };
 
 const statusLabel: Record<string, string> = {
   active: 'Aktif',
   completed: 'Selesai',
-  cancelled: 'Batal',
-};
+  cancelled: 'Batal' };
 
 export const TransactionsPage: React.FC = () => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -43,8 +40,8 @@ export const TransactionsPage: React.FC = () => {
   );
 
   return (
-    <Layout title="Riwayat Transaksi">
-      {/* Controls */}
+    <>
+          {/* Controls */}
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
@@ -132,6 +129,6 @@ export const TransactionsPage: React.FC = () => {
       <div style={{ marginTop: '0.75rem', fontSize: 12, color: 'var(--text-muted)' }}>
         Menampilkan {filtered.length} dari {transactions.length} transaksi
       </div>
-    </Layout>
+    </>
   );
 };

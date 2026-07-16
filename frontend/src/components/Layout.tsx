@@ -1,12 +1,8 @@
 import React from 'react';
+import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 
-interface LayoutProps {
-  children: React.ReactNode;
-  title?: string;
-}
-
-export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
+export const Layout: React.FC = () => {
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>
       <Sidebar />
@@ -17,17 +13,9 @@ export const Layout: React.FC<LayoutProps> = ({ children, title }) => {
         overflowY: 'auto',
         minHeight: '100vh',
       }}>
-        {title && (
-          <h1 style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: 22,
-            marginBottom: '1.5rem',
-            color: 'var(--text-primary)',
-          }}>
-            {title}
-          </h1>
-        )}
-        <div className="fade-in">{children}</div>
+        <div className="fade-in">
+          <Outlet />
+        </div>
       </main>
     </div>
   );

@@ -25,15 +25,10 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		AllowCredentials: true,
 	}))
 
-	// Health check
 	r.GET("/health", func(c *gin.Context) {
-		c.JSON(http.StatusOK, models.APIResponse{
-			Success: true,
-			Message: "Smart Parking API is running",
-		})
+		c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Smart Parking API is running"})
 	})
 
-	// Handlers
 	authH := handlers.NewAuthHandler(db)
 	dashH := handlers.NewDashboardHandler(db)
 	vehicleH := handlers.NewVehicleHandler(db)
@@ -41,7 +36,7 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	paymentH := handlers.NewPaymentHandler(db)
 	userH := handlers.NewUserHandler(db)
 
-	// Auth routes (public)
+	// Public routes
 	r.POST("/api/login", authH.Login)
 	r.POST("/api/payment/callback", paymentH.Callback)
 
@@ -49,7 +44,6 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware())
 	{
-		// Auth
 		api.GET("/me", authH.Me)
 
 		// Dashboard
@@ -74,19 +68,18 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		// Payments
 		api.POST("/payment/create", paymentH.CreatePayment)
 		api.GET("/payment/:id", paymentH.GetPayment)
+		api.GET("/payment/status/:order_id", paymentH.CheckPaymentStatus) // polling
 		api.POST("/payment/simulate/:order_id", paymentH.SimulatePayment)
 
-		// Users (admin only)
+		// Users & Roles
 		api.GET("/users", middleware.RequireRole("admin"), userH.ListUsers)
 		api.POST("/users", middleware.RequireRole("admin"), userH.CreateUser)
 		api.PUT("/users/:id", middleware.RequireRole("admin"), userH.UpdateUser)
 		api.DELETE("/users/:id", middleware.RequireRole("admin"), userH.DeleteUser)
 		api.GET("/roles", userH.ListRoles)
 
-		// Slots
+		// Slots & Reports
 		api.GET("/slots", userH.GetSlots)
-
-		// Reports
 		api.GET("/reports", userH.GetReports)
 	}
 

@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
 import { vehicleExit, getGates, createPayment, simulatePayment } from '../api/client';
-import { Gate } from '../types';
-import { LogOut, CreditCard, CheckCircle, AlertCircle, Clock, Banknote } from 'lucide-react';
+import type { Gate } from '../types';
+import { LogOut, CreditCard, CheckCircle, AlertCircle } from 'lucide-react';
 
 const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 const formatDuration = (mins: number) => {
@@ -39,8 +38,7 @@ export const ExitPage: React.FC = () => {
     try {
       const res = await vehicleExit({
         ticket_number: ticketNumber.toUpperCase(),
-        gate_id: gateId,
-      });
+        gate_id: gateId });
       setExitResult(res.data.data);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal memproses keluar';
@@ -56,8 +54,7 @@ export const ExitPage: React.FC = () => {
     try {
       const res = await createPayment({
         transaction_id: exitResult.transaction.id,
-        payment_method: paymentMethod,
-      });
+        payment_method: paymentMethod });
       const orderId = res.data.data.order_id;
 
       // Auto-simulate payment for demo
@@ -75,8 +72,8 @@ export const ExitPage: React.FC = () => {
   };
 
   return (
-    <Layout title="Kendaraan Keluar">
-      <div style={{ maxWidth: 600, margin: '0 auto' }}>
+    <>
+          <div style={{ maxWidth: 600, margin: '0 auto' }}>
         {!exitResult ? (
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
@@ -85,8 +82,7 @@ export const ExitPage: React.FC = () => {
                 background: 'rgba(239,68,68,0.1)',
                 border: '1px solid rgba(239,68,68,0.25)',
                 borderRadius: 12,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
+                display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                 <LogOut size={24} color="var(--accent-red)" />
               </div>
               <div>
@@ -100,8 +96,7 @@ export const ExitPage: React.FC = () => {
                 display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px',
                 background: paymentResult.success ? 'rgba(34,197,94,0.08)' : 'rgba(239,68,68,0.08)',
                 border: `1px solid ${paymentResult.success ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
-                borderRadius: 10, marginBottom: '1.5rem',
-              }}>
+                borderRadius: 10, marginBottom: '1.5rem' }}>
                 {paymentResult.success
                   ? <CheckCircle size={18} color="var(--accent-green)" />
                   : <AlertCircle size={18} color="var(--accent-red)" />
@@ -160,8 +155,7 @@ export const ExitPage: React.FC = () => {
               borderRadius: 12, padding: '1.25rem',
               border: '1px dashed var(--border)',
               marginBottom: '1.5rem',
-              display: 'flex', flexDirection: 'column', gap: 10,
-            }}>
+              display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
                 ['Nomor Tiket', exitResult.transaction.ticket_number],
                 ['Plat Kendaraan', exitResult.transaction.plate_number],
@@ -202,8 +196,7 @@ export const ExitPage: React.FC = () => {
                       fontSize: 13,
                       background: paymentMethod === val ? 'rgba(56,189,248,0.1)' : 'var(--bg-secondary)',
                       border: `1px solid ${paymentMethod === val ? 'var(--accent-cyan)' : 'var(--border)'}`,
-                      color: paymentMethod === val ? 'var(--accent-cyan)' : 'var(--text-secondary)',
-                    }}
+                      color: paymentMethod === val ? 'var(--accent-cyan)' : 'var(--text-secondary)' }}
                   >
                     {label}
                   </button>
@@ -231,6 +224,6 @@ export const ExitPage: React.FC = () => {
           </div>
         )}
       </div>
-    </Layout>
+    </>
   );
 };

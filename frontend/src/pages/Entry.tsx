@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Layout } from '../components/Layout';
-import { vehicleEntry, getGates, getSlots } from '../api/client';
-import { Gate, ParkingSlot } from '../types';
-import { LogIn, Car, CheckCircle, AlertCircle } from 'lucide-react';
+import { vehicleEntry, getGates } from '../api/client';
+import type { Gate } from '../types';
+import { LogIn, CheckCircle, AlertCircle } from 'lucide-react';
 
 export const EntryPage: React.FC = () => {
   const [plateNumber, setPlateNumber] = useState('');
@@ -24,8 +23,7 @@ export const EntryPage: React.FC = () => {
       const res = await vehicleEntry({
         plate_number: plateNumber.toUpperCase().replace(/\s/g, ''),
         vehicle_type: vehicleType,
-        gate_id: gateId,
-      });
+        gate_id: gateId });
       setResult({ success: true, message: res.data.message, data: res.data.data });
       setPlateNumber('');
     } catch (err: unknown) {
@@ -37,8 +35,8 @@ export const EntryPage: React.FC = () => {
   };
 
   return (
-    <Layout title="Kendaraan Masuk">
-      <div style={{ maxWidth: 600, margin: '0 auto' }}>
+    <>
+          <div style={{ maxWidth: 600, margin: '0 auto' }}>
         <div className="card">
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: '1.5rem' }}>
             <div style={{
@@ -46,8 +44,7 @@ export const EntryPage: React.FC = () => {
               background: 'rgba(34,197,94,0.1)',
               border: '1px solid rgba(34,197,94,0.25)',
               borderRadius: 12,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}>
+              display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
               <LogIn size={24} color="var(--accent-green)" />
             </div>
             <div>
@@ -64,20 +61,19 @@ export const EntryPage: React.FC = () => {
               border: `1px solid ${result.success ? 'rgba(34,197,94,0.25)' : 'rgba(239,68,68,0.25)'}`,
               borderRadius: 10,
               marginBottom: '1.5rem',
-              animation: 'fadeIn 0.3s ease',
-            }}>
+              animation: 'fadeIn 0.3s ease' }}>
               {result.success
                 ? <CheckCircle size={18} color="var(--accent-green)" style={{ flexShrink: 0, marginTop: 1 }} />
                 : <AlertCircle size={18} color="var(--accent-red)" style={{ flexShrink: 0, marginTop: 1 }} />
               }
               <div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: result.success ? 'var(--accent-green)' : 'var(--accent-red)' }}>
-                  {result.message}
+                  {String(result.message ?? "")}
                 </div>
-                {result.success && result.data && (
+                {result.success && !!result.data && (
                   <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-secondary)' }}>
                     Tiket: <span style={{ fontFamily: 'var(--font-display)', color: 'var(--accent-cyan)' }}>
-                      {(result.data as { ticket_number: string }).ticket_number}
+                      {((result.data as Record<string, unknown>)?.ticket_number as string) ?? ""}
                     </span>
                   </div>
                 )}
@@ -146,6 +142,6 @@ export const EntryPage: React.FC = () => {
           </ol>
         </div>
       </div>
-    </Layout>
+    </>
   );
 };

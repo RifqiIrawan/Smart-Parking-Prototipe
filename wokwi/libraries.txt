@@ -1,0 +1,7 @@
+# Wokwi ESP32 Libraries
+# Format: LibraryName @ Version
+
+PubSubClient @ 2.8
+ArduinoJson @ 6.21.3
+ESP32Servo @ 0.13.0
+LiquidCrystal I2C @ 1.1.2

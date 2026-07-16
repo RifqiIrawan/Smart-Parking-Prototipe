@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "author": "Smart Parking System",
+  "editor": "wokwi",
+  "parts": [
+    {
+      "type": "wokwi-esp32-devkit-v1",
+      "id": "esp",
+      "top": 0,
+      "left": 0,
+      "attrs": { "env": "arduino-community" }
+    },
+    {
+      "type": "wokwi-servo",
+      "id": "servo1",
+      "top": -80,
+      "left": 250,
+      "attrs": { "horn": "cross" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_green",
+      "top": 80,
+      "left": 340,
+      "attrs": { "color": "green" }
+    },
+    {
+      "type": "wokwi-led",
+      "id": "led_red",
+      "top": 80,
+      "left": 390,
+      "attrs": { "color": "red" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r1",
+      "top": 105,
+      "left": 295,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-resistor",
+      "id": "r2",
+      "top": 105,
+      "left": 345,
+      "attrs": { "value": "220" }
+    },
+    {
+      "type": "wokwi-lcd1602",
+      "id": "lcd1",
+      "top": 200,
+      "left": 160,
+      "attrs": { "pins": "i2c" }
+    }
+  ],
+  "connections": [
+    ["esp:GND.1", "led_green:C", "black", ["v0"]],
+    ["esp:GND.2", "led_red:C", "black", ["v0"]],
+    ["esp:D14", "r1:1", "green", ["v0"]],
+    ["r1:2", "led_green:A", "green", ["v0"]],
+    ["esp:D12", "r2:1", "red", ["v0"]],
+    ["r2:2", "led_red:A", "red", ["v0"]],
+    ["esp:D13", "servo1:PWM", "orange", ["h10", "v-50"]],
+    ["esp:GND.3", "servo1:GND", "black", ["h10", "v-50"]],
+    ["esp:3V3", "servo1:V+", "red", ["h10", "v-50"]],
+    ["esp:D21", "lcd1:SDA", "blue", ["v20"]],
+    ["esp:D22", "lcd1:SCL", "purple", ["v20"]],
+    ["esp:GND.4", "lcd1:GND", "black", []],
+    ["esp:5V", "lcd1:VCC", "red", []]
+  ],
+  "dependencies": {}
+}

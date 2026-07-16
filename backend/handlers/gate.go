@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/RifqiIrawan/smart-parking/backend/config"
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
 )
@@ -105,6 +106,10 @@ func (h *GateHandler) ControlGate(c *gin.Context) {
 		status = "open"
 	}
 
+	// Get gate name for MQTT message
+	var gateName string
+	h.DB.QueryRow(`SELECT name FROM gates WHERE id = $1`, req.GateID).Scan(&gateName)
+
 	result, err := h.DB.Exec(`UPDATE gates SET status=$1, updated_at=NOW() WHERE id=$2`, status, req.GateID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
@@ -117,12 +122,17 @@ func (h *GateHandler) ControlGate(c *gin.Context) {
 		return
 	}
 
-	// TODO: Send HTTP/MQTT command to physical gate controller
-	// go sendGateCommand(req.GateID, req.Command)
+	// Publish MQTT command to ESP32/hardware
+	go config.PublishGateCommand(req.GateID, gateName, req.Command)
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: fmt.Sprintf("Gate %s successfully", req.Command),
-		Data:    gin.H{"gate_id": req.GateID, "status": status},
+		Data: gin.H{
+			"gate_id":   req.GateID,
+			"gate_name": gateName,
+			"status":    status,
+			"mqtt":      fmt.Sprintf("smart-parking/gate/%s/command", req.GateID),
+		},
 	})
 }
