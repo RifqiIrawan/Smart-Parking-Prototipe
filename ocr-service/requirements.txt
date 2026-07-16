@@ -3,7 +3,7 @@ uvicorn[standard]==0.27.0
 python-multipart==0.0.6
 pydantic==2.5.3
 paddleocr==2.7.3
-paddlepaddle==2.5.2
-opencv-python-headless==4.9.0.80
-numpy==1.26.3
+paddlepaddle==3.0.0
+opencv-python-headless>=4.10.0
+numpy>=2.0.0
 Pillow==10.2.0

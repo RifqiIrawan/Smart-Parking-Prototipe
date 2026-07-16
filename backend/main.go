@@ -15,7 +15,10 @@ func main() {
 	}
 
 	// Connect to database
-	db := config.InitDB()
+	db, err := config.InitDB()
+	if err != nil {
+		log.Fatal("DB connection failed:", err)
+	}
 	defer db.Close()
 
 	// Connect to MQTT broker
