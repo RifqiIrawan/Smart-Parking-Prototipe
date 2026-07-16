@@ -91,5 +91,5 @@ MQTT_BROKER=tcp://localhost:1883
 ```
 
 Frontend otomatis connect ke WebSocket broker:
-- Lokal: `ws://localhost:9001`
+- Lokal: `ws://localhost:9002` (mosquitto container memetakan port internal 9001 ke 9002 di host, karena 9001 sering dipakai proses lain di Windows/WSL/Docker)
 - Public HiveMQ: `wss://broker.hivemq.com:8884/mqtt`

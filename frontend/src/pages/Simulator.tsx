@@ -5,9 +5,25 @@ import {
   ChevronRight, Radio
 } from 'lucide-react';
 import { useMQTT } from '../hooks/useMQTT';
-import apiClient from '../api/client';
+import apiClient, { vehicleEntry, vehicleExit } from '../api/client';
 import { createPayment, checkPaymentStatus, simulatePayment } from '../api/payment';
 import type { PaymentData } from '../api/payment';
+
+// ──────────────────────────────────────────────────────────
+// Auto Demo — simulates camera/RFID detection + a self-paying
+// customer so the full cycle runs with zero clicks and zero hardware.
+// ──────────────────────────────────────────────────────────
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+const randomPlate = () => {
+  const prefixes = ['B', 'D', 'F', 'L', 'AB', 'BE'];
+  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+  const numbers = Math.floor(1000 + Math.random() * 9000);
+  const letters = Array.from({ length: 3 }, () =>
+    String.fromCharCode(65 + Math.floor(Math.random() * 26))
+  ).join('');
+  return `${prefix}${numbers}${letters}`;
+};
 
 // ──────────────────────────────────────────────────────────
 // Types
@@ -383,7 +399,12 @@ export const Simulator: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [gateLoading, setGateLoading] = useState<Record<string, boolean>>({});
   const [activePayment, setActivePayment] = useState<PaymentData | null>(null);
-  const [activeTab, setActiveTab] = useState<'gates' | 'payment' | 'wokwi'>('gates');
+  const [activeTab, setActiveTab] = useState<'gates' | 'payment' | 'wokwi' | 'auto'>('gates');
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoLoop, setAutoLoop] = useState(false);
+  const [autoStage, setAutoStage] = useState('');
+  const autoLoopRef = useRef(false);
+  const autoRunningRef = useRef(false);
 
   const addLog = useCallback((entry: Omit<LogEntry, 'id' | 'time'>) => {
     setLogs(prev => [{
@@ -565,6 +586,111 @@ export const Simulator: React.FC = () => {
     });
   };
 
+  const refreshGates = async () => {
+    const res = await apiClient.get('/gates');
+    const g = res.data.data || [];
+    setGates(g);
+    const states: Record<string, { open: boolean; angle: number }> = {};
+    g.forEach((gate: Gate) => {
+      states[gate.id] = { open: gate.status === 'open', angle: gate.status === 'open' ? 90 : 0 };
+    });
+    setGateStates(states);
+    return g as Gate[];
+  };
+
+  // Runs the full masuk → parkir → keluar → bayar → gate cycle with zero
+  // clicks, standing in for hardware that doesn't exist yet: a random plate
+  // simulates the camera/RFID reader, and an auto-simulated payment stands
+  // in for a customer paying with their own e-wallet.
+  const runAutoDemo = async () => {
+    if (autoRunningRef.current) return;
+    autoRunningRef.current = true;
+    setAutoRunning(true);
+
+    try {
+      const currentGates = gates.length > 0 ? gates : await refreshGates();
+      const entryGate = currentGates.find(g => g.type === 'entry');
+      const exitGate = currentGates.find(g => g.type === 'exit');
+      if (!entryGate || !exitGate) {
+        addLog({ source: 'system', event: 'Demo Otomatis gagal', detail: 'Gate masuk/keluar belum ada di database', ok: false });
+        return;
+      }
+
+      const plate = randomPlate();
+
+      // 1. Simulated camera/RFID detection at entry
+      setAutoStage('📷 Mendeteksi kendaraan di gate masuk...');
+      addLog({ source: 'system', event: '📷 [SIMULASI KAMERA] Plat terdeteksi', detail: `${plate} di ${entryGate.name}`, ok: true });
+      await sleep(1200);
+
+      const entryRes = await vehicleEntry({ plate_number: plate, vehicle_type: 'car', gate_id: entryGate.id });
+      const ticketNumber = entryRes.data.data.ticket_number as string;
+      addLog({ source: 'api', event: 'Kendaraan masuk', detail: `Tiket ${ticketNumber} · Gate ${entryGate.name} terbuka`, ok: true });
+      await refreshGates();
+
+      // 2. Simulated parking duration
+      setAutoStage('🅿️ Kendaraan sedang parkir...');
+      addLog({ source: 'system', event: '🅿️ Kendaraan parkir', detail: 'Menunggu (disingkat untuk demo)...', ok: true });
+      await sleep(4000);
+
+      // 3. Simulated camera/RFID detection at exit — looked up by PLATE, not ticket
+      setAutoStage('📷 Mendeteksi kendaraan di gate keluar...');
+      addLog({ source: 'system', event: '📷 [SIMULASI KAMERA] Plat terdeteksi', detail: `${plate} di ${exitGate.name}`, ok: true });
+      await sleep(1200);
+
+      const exitRes = await vehicleExit({ ticket_number: '', plate_number: plate, gate_id: exitGate.id });
+      const exitData = exitRes.data.data;
+      const transactionId = exitData.transaction.id as string;
+      const totalAmount = exitData.total_amount as number;
+      addLog({
+        source: 'api', event: 'Tarif dihitung (cari otomatis via plat, tanpa tiket)',
+        detail: `Rp ${totalAmount.toLocaleString('id')} · durasi ${exitData.duration_minutes} menit`, ok: true,
+      });
+
+      // 4. Auto-create payment
+      setAutoStage('💳 Membuat tagihan QRIS...');
+      const payment = await createPayment({ transaction_id: transactionId, payment_method: 'qris' });
+      addLog({ source: 'api', event: 'QRIS dibuat', detail: `Order ${payment.order_id} · Rp ${payment.amount.toLocaleString('id')}`, ok: true });
+
+      // 5. Simulated self-service payment (stands in for customer scanning with their own e-wallet)
+      setAutoStage('⏳ Menunggu pembayaran (simulasi customer bayar sendiri)...');
+      addLog({ source: 'system', event: '⏳ Menunggu pembayaran', detail: 'Simulasi: customer scan & bayar via e-wallet sendiri...', ok: true });
+      await sleep(2500);
+
+      await simulatePayment(payment.order_id);
+      addLog({ source: 'api', event: '✅ Pembayaran berhasil', detail: `Rp ${totalAmount.toLocaleString('id')} · Gate keluar terbuka otomatis`, ok: true });
+      setAutoStage('🚧 Gate keluar terbuka...');
+      await refreshGates();
+
+      // 6. Wait for the backend's auto-close (10s) then confirm visually
+      await sleep(10500);
+      await refreshGates();
+      setAutoStage('✅ Siklus selesai — gate tertutup kembali');
+      addLog({ source: 'system', event: '✅ Siklus otomatis selesai', detail: `${plate} · tiket ${ticketNumber} · Rp ${totalAmount.toLocaleString('id')}`, ok: true });
+    } catch (e: unknown) {
+      const msg = (e as { response?: { data?: { message?: string } } })?.response?.data?.message || (e as Error).message;
+      addLog({ source: 'system', event: 'Demo Otomatis error', detail: msg, ok: false });
+      setAutoStage('');
+    } finally {
+      autoRunningRef.current = false;
+      setAutoRunning(false);
+      if (autoLoopRef.current) {
+        setTimeout(() => runAutoDemo(), 1500);
+      } else {
+        setAutoStage('');
+      }
+    }
+  };
+
+  const toggleAutoLoop = () => {
+    const next = !autoLoop;
+    setAutoLoop(next);
+    autoLoopRef.current = next;
+    if (next && !autoRunningRef.current) {
+      runAutoDemo();
+    }
+  };
+
   // ──────────────────────────────────
   // Render
   // ──────────────────────────────────
@@ -652,6 +778,7 @@ export const Simulator: React.FC = () => {
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, marginBottom: '1.5rem', borderBottom: '1px solid var(--border)', paddingBottom: 1 }}>
         {([
+          { id: 'auto', label: '🚀 Demo Otomatis' },
           { id: 'gates', label: '🚧 Gate Simulator' },
           { id: 'payment', label: '💳 Payment QRIS' },
           { id: 'wokwi', label: '🤖 Wokwi Setup' },
@@ -676,6 +803,69 @@ export const Simulator: React.FC = () => {
 
         {/* Left Panel */}
         <div>
+          {/* ── AUTO DEMO TAB ── */}
+          {activeTab === 'auto' && (
+            <div>
+              <div style={{ marginBottom: '1.25rem' }}>
+                <h3 style={{ fontSize: 14, fontFamily: 'var(--font-display)', marginBottom: 8 }}>
+                  Siklus Penuh Tanpa Petugas &amp; Tanpa Hardware
+                </h3>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                  Satu klik menjalankan seluruh alur secara otomatis: kamera/RFID (disimulasikan) mendeteksi
+                  plat di gate masuk → kendaraan parkir → terdeteksi lagi di gate keluar (dicari otomatis lewat
+                  plat, bukan nomor tiket) → tagihan dibuat → customer &ldquo;bayar sendiri&rdquo; (disimulasikan) →
+                  gate keluar buka lalu tutup lagi. Tidak ada tombol yang perlu Anda klik di tengah jalan.
+                </p>
+              </div>
+
+              <div style={{
+                background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+                borderRadius: 12, padding: '1.5rem', textAlign: 'center', marginBottom: '1rem',
+              }}>
+                <Radio size={40} color="#a78bfa" style={{ display: 'block', margin: '0 auto 1rem', opacity: 0.85 }} />
+
+                {autoStage && (
+                  <div style={{
+                    fontSize: 13, color: '#38bdf8', marginBottom: '1rem', minHeight: 20,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  }}>
+                    {autoRunning && <div className="spinner" style={{ width: 14, height: 14 }} />}
+                    {autoStage}
+                  </div>
+                )}
+
+                <button
+                  className="btn btn-primary"
+                  onClick={runAutoDemo}
+                  disabled={autoRunning}
+                  style={{ gap: 8, marginBottom: 12 }}
+                >
+                  {autoRunning
+                    ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Sedang berjalan…</>
+                    : <><Zap size={16} /> Jalankan Demo Otomatis (1x)</>
+                  }
+                </button>
+
+                <div>
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={autoLoop} onChange={toggleAutoLoop} />
+                    Ulangi terus-menerus (buat dibiarkan jalan saat demo ke orang lain)
+                  </label>
+                </div>
+              </div>
+
+              <div style={{
+                background: '#a78bfa08', border: '1px solid #a78bfa20',
+                borderRadius: 8, padding: '0.875rem', fontSize: 12, color: '#a78bfa', lineHeight: 1.6,
+              }}>
+                <strong>Yang disimulasikan (belum ada alatnya):</strong> kamera/OCR plat nomor, RFID reader,
+                dan customer yang bayar sendiri lewat e-wallet. <strong>Yang sungguhan berjalan:</strong> semua
+                panggilan API ke backend, perhitungan tarif, penyimpanan database, dan perintah MQTT ke gate —
+                identik dengan yang akan terjadi kalau hardware fisik sudah terpasang.
+              </div>
+            </div>
+          )}
+
           {/* ── GATE TAB ── */}
           {activeTab === 'gates' && (
             <div>

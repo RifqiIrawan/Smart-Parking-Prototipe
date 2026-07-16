@@ -3,7 +3,7 @@ import { vehicleExit, getGates } from '../api/client';
 import { createPayment, checkPaymentStatus, simulatePayment } from '../api/payment';
 import type { PaymentData } from '../api/payment';
 import type { Gate } from '../types';
-import { LogOut, CreditCard, CheckCircle, AlertCircle, QrCode, Clock, Zap } from 'lucide-react';
+import { LogOut, CreditCard, CheckCircle, AlertCircle, QrCode, Clock, Zap, Landmark, Wallet, Banknote, Copy, Check } from 'lucide-react';
 
 const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 const formatDuration = (mins: number) => {
@@ -14,15 +14,23 @@ const formatDuration = (mins: number) => {
 };
 
 // ──────────────────────────────────────────────────────────
-// QRIS Payment Panel (inline, no separate modal)
+// Payment Panel (inline, no separate modal) — renders differently per method
 // ──────────────────────────────────────────────────────────
-const QRISPanel: React.FC<{
+const METHOD_META: Record<string, { icon: React.ReactNode; title: string; badge: string }> = {
+  qris:            { icon: <QrCode size={18} color="#38bdf8" />,  title: 'Scan QRIS untuk Membayar',    badge: 'QRIS' },
+  virtual_account: { icon: <Landmark size={18} color="#38bdf8" />, title: 'Transfer Virtual Account',    badge: 'VA' },
+  ewallet:         { icon: <Wallet size={18} color="#38bdf8" />,   title: 'Bayar dengan E-Wallet',       badge: 'E-WALLET' },
+  cash:            { icon: <Banknote size={18} color="#38bdf8" />, title: 'Pembayaran Tunai',            badge: 'TUNAI' },
+};
+
+const PaymentPanel: React.FC<{
   payment: PaymentData;
   onPaid: () => void;
   onCancel: () => void;
 }> = ({ payment, onPaid, onCancel }) => {
   const [status, setStatus]       = useState<'pending' | 'paid' | 'simulating'>('pending');
   const [countdown, setCountdown] = useState(900);
+  const [copied, setCopied]       = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -60,10 +68,21 @@ const QRISPanel: React.FC<{
     }
   };
 
+  const handleCopyVA = () => {
+    if (!payment.va_number) return;
+    navigator.clipboard.writeText(payment.va_number).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   const mins = String(Math.floor(countdown / 60)).padStart(2, '0');
   const secs = String(countdown % 60).padStart(2, '0');
   const qrSrc = payment.qr_image_url ||
     `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(payment.qr_string || payment.order_id)}&bgcolor=ffffff&color=0a0e1a&margin=12`;
+
+  const meta = METHOD_META[payment.method] ?? METHOD_META.qris;
+  const confirmLabel = payment.method === 'cash' ? 'Konfirmasi Uang Diterima' : 'Konfirmasi Pembayaran';
 
   if (status === 'paid') {
     return (
@@ -83,8 +102,8 @@ const QRISPanel: React.FC<{
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '1rem', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <QrCode size={18} color="#38bdf8" />
-          <span style={{ fontWeight: 600, fontSize: 14 }}>Scan QRIS untuk Membayar</span>
+          {meta.icon}
+          <span style={{ fontWeight: 600, fontSize: 14 }}>{meta.title}</span>
         </div>
         <button onClick={onCancel} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', fontSize: 18 }}>×</button>
       </div>
@@ -104,17 +123,72 @@ const QRISPanel: React.FC<{
         <div style={{ fontSize: 10, color: '#64748b' }}>{payment.order_id}</div>
       </div>
 
-      {/* QR Code */}
-      <div style={{ background: '#fff', borderRadius: 10, padding: '1rem', display: 'flex', justifyContent: 'center', marginBottom: '0.75rem', position: 'relative' }}>
-        <img src={qrSrc} alt="QRIS" width={200} height={200} style={{ borderRadius: 6, display: 'block' }}
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${payment.order_id}&bgcolor=ffffff`;
-          }}
-        />
-        <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', background: '#ef4444', color: '#fff', padding: '2px 10px', borderRadius: 4, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>
-          QRIS
+      {/* Method-specific body */}
+      {payment.method === 'qris' && (
+        <div style={{ background: '#fff', borderRadius: 10, padding: '1rem', display: 'flex', justifyContent: 'center', marginBottom: '0.75rem', position: 'relative' }}>
+          <img src={qrSrc} alt="QRIS" width={200} height={200} style={{ borderRadius: 6, display: 'block' }}
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${payment.order_id}&bgcolor=ffffff`;
+            }}
+          />
+          <div style={{ position: 'absolute', bottom: 12, left: '50%', transform: 'translateX(-50%)', background: '#ef4444', color: '#fff', padding: '2px 10px', borderRadius: 4, fontSize: 10, fontWeight: 700, letterSpacing: 1 }}>
+            QRIS
+          </div>
         </div>
-      </div>
+      )}
+
+      {payment.method === 'virtual_account' && (
+        <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 10, padding: '1.25rem', marginBottom: '0.75rem', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1 }}>
+            Bank {payment.bank ? payment.bank.toUpperCase() : ''}
+          </div>
+          <div style={{ fontSize: 26, fontWeight: 700, fontFamily: 'var(--font-display)', color: 'var(--accent-cyan)', letterSpacing: 2, margin: '8px 0' }}>
+            {payment.va_number || '-'}
+          </div>
+          <button
+            onClick={handleCopyVA}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12,
+              background: copied ? '#22c55e15' : '#38bdf815', color: copied ? '#22c55e' : '#38bdf8',
+              border: 'none', borderRadius: 6, padding: '6px 12px', cursor: 'pointer',
+            }}
+          >
+            {copied ? <><Check size={13} /> Tersalin</> : <><Copy size={13} /> Salin Nomor VA</>}
+          </button>
+        </div>
+      )}
+
+      {payment.method === 'ewallet' && (
+        <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 10, padding: '1.5rem', marginBottom: '0.75rem', textAlign: 'center' }}>
+          <Wallet size={40} color="#38bdf8" style={{ display: 'block', margin: '0 auto 0.75rem', opacity: 0.85 }} />
+          {payment.deeplink && (
+            <a href={payment.deeplink} target="_blank" rel="noopener noreferrer"
+              className="btn btn-primary" style={{ justifyContent: 'center', gap: 8 }}>
+              Buka Aplikasi E-Wallet
+            </a>
+          )}
+        </div>
+      )}
+
+      {payment.method === 'cash' && (
+        <div style={{ background: 'var(--bg-primary)', border: '1px solid var(--border)', borderRadius: 10, padding: '1.5rem', marginBottom: '0.75rem', textAlign: 'center' }}>
+          <Banknote size={40} color="#38bdf8" style={{ display: 'block', margin: '0 auto 0.75rem', opacity: 0.85 }} />
+          <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+            Terima uang tunai {formatRp(payment.amount)} dari pelanggan di loket
+          </div>
+        </div>
+      )}
+
+      {/* Instructions */}
+      {payment.payment_instructions && (
+        <div style={{
+          background: '#38bdf808', border: '1px solid #38bdf820',
+          borderRadius: 8, padding: '0.75rem', fontSize: 12,
+          color: 'var(--text-secondary)', marginBottom: '0.75rem', lineHeight: 1.6,
+        }}>
+          {payment.payment_instructions}
+        </div>
+      )}
 
       {/* Timer */}
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, marginBottom: '0.75rem' }}>
@@ -127,7 +201,7 @@ const QRISPanel: React.FC<{
         </span>
       </div>
 
-      {/* Simulate Button */}
+      {/* Simulate/Confirm Button */}
       <button
         className="btn btn-primary"
         onClick={handleSimulate}
@@ -136,7 +210,7 @@ const QRISPanel: React.FC<{
       >
         {status === 'simulating'
           ? <><div className="spinner" style={{ width: 14, height: 14 }} /> Memproses…</>
-          : <><Zap size={14} /> {payment.use_midtrans ? '🧪 Simulasi (Testing)' : '⚡ Konfirmasi Pembayaran'}</>
+          : <><Zap size={14} /> {payment.use_midtrans ? '🧪 Simulasi (Testing)' : `⚡ ${confirmLabel}`}</>
         }
       </button>
 
@@ -165,6 +239,10 @@ export const ExitPage: React.FC = () => {
     transaction: { id: string; ticket_number: string; plate_number: string; entry_time: string };
     duration_minutes: number;
     total_amount: number;
+    subtotal?: number;
+    discount_percent?: number;
+    discount_amount?: number;
+    member_name?: string;
   }>(null);
   const [activePayment, setActivePayment] = useState<PaymentData | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -299,6 +377,20 @@ export const ExitPage: React.FC = () => {
                   <span style={{ fontWeight: 500 }}>{value}</span>
                 </div>
               ))}
+              {!!exitResult.discount_amount && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 6, marginBottom: 6, borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ color: 'var(--text-secondary)' }}>Subtotal</span>
+                    <span>{formatRp(exitResult.subtotal ?? exitResult.total_amount)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, paddingBottom: 6, marginBottom: 6, borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ color: '#a78bfa' }}>
+                      🏷️ Diskon Member{exitResult.member_name ? ` (${exitResult.member_name})` : ''} · {exitResult.discount_percent}%
+                    </span>
+                    <span style={{ color: '#a78bfa', fontWeight: 600 }}>-{formatRp(exitResult.discount_amount)}</span>
+                  </div>
+                </>
+              )}
               <div style={{ display: 'flex', justifyContent: 'space-between', paddingTop: 4 }}>
                 <span style={{ fontWeight: 700 }}>Total Biaya</span>
                 <span style={{ fontWeight: 700, color: 'var(--accent-cyan)', fontSize: 16 }}>
@@ -356,7 +448,7 @@ export const ExitPage: React.FC = () => {
         {/* Step 3 — QRIS Panel */}
         {activePayment && (
           <div className="card">
-            <QRISPanel
+            <PaymentPanel
               payment={activePayment}
               onPaid={handlePaymentPaid}
               onCancel={() => setActivePayment(null)}

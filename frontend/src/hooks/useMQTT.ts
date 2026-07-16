@@ -23,7 +23,7 @@ export interface UseMQTTOptions {
   enabled?: boolean;
 }
 
-const DEFAULT_BROKER  = 'ws://localhost:9001';
+const DEFAULT_BROKER  = 'ws://localhost:9002';
 const FALLBACK_BROKER = 'wss://broker.hivemq.com:8884/mqtt';
 
 export function useMQTT({
@@ -55,9 +55,15 @@ export function useMQTT({
     }
   }, []); // no deps — uses ref
 
+  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const connectTo = useCallback((brokerUrl: string, isFallback = false) => {
     clientRef.current?.end(true);
     clientRef.current = null;
+    if (fallbackTimerRef.current) {
+      clearTimeout(fallbackTimerRef.current);
+      fallbackTimerRef.current = null;
+    }
 
     setStatus(s => ({ ...s, connecting: true, error: null, broker: brokerUrl }));
 
@@ -68,7 +74,27 @@ export function useMQTT({
       connectTimeout: 8000,
     });
 
+    let settled = false;
+    const triggerFallback = () => {
+      if (settled || isFallback) return;
+      settled = true;
+      connectTo(FALLBACK_BROKER, true);
+    };
+
+    // FIX: mqtt.js doesn't reliably emit 'error' on a plain connection-refused
+    // (e.g. nothing listening on the port) — it just loops 'close'/'reconnect'
+    // against the same broker forever, so the UI got stuck on "connecting"
+    // and the fallback below never ran. Force the fallback on a timer too.
+    if (!isFallback) {
+      fallbackTimerRef.current = setTimeout(triggerFallback, 6000);
+    }
+
     client.on('connect', () => {
+      settled = true;
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
       setStatus({ connected: true, connecting: false, error: null, broker: brokerUrl });
       const t = topicsRef.current;
       if (t.length > 0) client.subscribe(t, { qos: 1 });
@@ -76,10 +102,7 @@ export function useMQTT({
 
     client.on('error', (err) => {
       setStatus(s => ({ ...s, connecting: false, error: err.message }));
-      if (!isFallback) {
-        client.end(true);
-        setTimeout(() => connectTo(FALLBACK_BROKER, true), 500);
-      }
+      triggerFallback();
     });
 
     client.on('offline', () => setStatus(s => ({ ...s, connected: false })));
@@ -92,7 +115,10 @@ export function useMQTT({
   useEffect(() => {
     if (!enabled) return;
     connectTo(broker);
-    return () => { clientRef.current?.end(true); };
+    return () => {
+      clientRef.current?.end(true);
+      if (fallbackTimerRef.current) clearTimeout(fallbackTimerRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [enabled]); // FIX: only re-run when enabled changes, not on every broker/topics change
 

@@ -196,6 +196,8 @@ tbody tr:last-child td { border-bottom: none; }
   padding: 2rem;
   width: 90%;
   max-width: 500px;
+  max-height: 85vh;
+  overflow-y: auto;
   animation: fadeIn 0.25s ease;
 }
 .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem; }

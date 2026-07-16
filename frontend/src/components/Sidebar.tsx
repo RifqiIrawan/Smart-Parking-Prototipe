@@ -2,7 +2,7 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Car, LogOut as LogOutIcon, DoorOpen,
-  Receipt, Users, BarChart3, ParkingSquare, LogIn, Zap
+  Receipt, Users, BarChart3, ParkingSquare, LogIn, Zap, Wallet, BadgePercent
 } from 'lucide-react';
 import { useAuth } from '../store/auth';
 
@@ -13,6 +13,8 @@ const navItems = [
   { to: '/slots', icon: ParkingSquare, label: 'Slot Parkir' },
   { to: '/gates', icon: DoorOpen, label: 'Gate Monitor' },
   { to: '/transactions', icon: Receipt, label: 'Transaksi' },
+  { to: '/tariffs', icon: Wallet, label: 'Tarif Parkir' },
+  { to: '/members', icon: BadgePercent, label: 'Member & Diskon' },
   { to: '/reports', icon: BarChart3, label: 'Laporan' },
   { to: '/users', icon: Users, label: 'Manajemen User' },
 ];

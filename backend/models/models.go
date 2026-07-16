@@ -109,6 +109,43 @@ type Tariff struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
+// TariffRequest for creating/updating a per-vehicle-category tariff
+type TariffRequest struct {
+	VehicleType   string  `json:"vehicle_type"`
+	FirstHourRate float64 `json:"first_hour_rate" binding:"required,gt=0"`
+	NextHourRate  float64 `json:"next_hour_rate" binding:"required,gt=0"`
+	MaxDailyRate  float64 `json:"max_daily_rate"`
+	IsActive      bool    `json:"is_active"`
+}
+
+// Member represents a subscriber/member with a parking discount
+type Member struct {
+	ID              string    `json:"id"`
+	PlateNumber     string    `json:"plate_number"`
+	MemberName      string    `json:"member_name"`
+	Phone           string    `json:"phone"`
+	MembershipType  string    `json:"membership_type"`
+	DiscountPercent float64   `json:"discount_percent"`
+	ValidFrom       string    `json:"valid_from"`
+	ValidUntil      string    `json:"valid_until"`
+	IsActive        bool      `json:"is_active"`
+	Notes           string    `json:"notes"`
+	CreatedAt       time.Time `json:"created_at"`
+}
+
+// MemberRequest for creating/updating a member/subscription record
+type MemberRequest struct {
+	PlateNumber     string  `json:"plate_number" binding:"required"`
+	MemberName      string  `json:"member_name" binding:"required"`
+	Phone           string  `json:"phone"`
+	MembershipType  string  `json:"membership_type"`
+	DiscountPercent float64 `json:"discount_percent" binding:"gte=0,lte=100"`
+	ValidFrom       string  `json:"valid_from" binding:"required"`
+	ValidUntil      string  `json:"valid_until" binding:"required"`
+	IsActive        bool    `json:"is_active"`
+	Notes           string  `json:"notes"`
+}
+
 // DashboardStats for the dashboard overview
 type DashboardStats struct {
 	TotalSlots       int     `json:"total_slots"`
@@ -136,9 +173,11 @@ type VehicleEntryRequest struct {
 	PlateImage  string  `json:"plate_image"`
 }
 
-// VehicleExitRequest for exit processing
+// VehicleExitRequest for exit processing.
+// Either TicketNumber or PlateNumber must be provided — PlateNumber lookup
+// enables unattended exit flows (camera/RFID) that never see a ticket number.
 type VehicleExitRequest struct {
-	TicketNumber string `json:"ticket_number" binding:"required"`
+	TicketNumber string `json:"ticket_number"`
 	PlateNumber  string `json:"plate_number"`
 	GateID       string `json:"gate_id"`
 	PlateImage   string `json:"plate_image"`

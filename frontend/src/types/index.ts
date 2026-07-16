@@ -54,6 +54,30 @@ export interface Payment {
   expired_at?: string;
 }
 
+export interface Tariff {
+  id: string;
+  vehicle_type: string;
+  first_hour_rate: number;
+  next_hour_rate: number;
+  max_daily_rate: number;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface Member {
+  id: string;
+  plate_number: string;
+  member_name: string;
+  phone: string;
+  membership_type: string;
+  discount_percent: number;
+  valid_from: string;
+  valid_until: string;
+  is_active: boolean;
+  notes: string;
+  created_at: string;
+}
+
 export interface DashboardStats {
   total_slots: number;
   available_slots: number;

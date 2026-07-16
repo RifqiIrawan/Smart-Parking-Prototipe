@@ -13,6 +13,8 @@ import { TransactionsPage } from './pages/Transactions';
 import { GatesPage } from './pages/Gates';
 import { SlotsPage } from './pages/Slots';
 import { UsersPage } from './pages/Users';
+import { TariffsPage } from './pages/Tariffs';
+import { MembersPage } from './pages/Members';
 import { ReportsPage } from './pages/Reports';
 import { Simulator } from './pages/Simulator';
 import './index.css';
@@ -55,6 +57,8 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/transactions" element={<TransactionsPage />} />
               <Route path="/reports"      element={<ReportsPage />} />
               <Route path="/users"        element={<UsersPage />} />
+              <Route path="/tariffs"      element={<TariffsPage />} />
+              <Route path="/members"      element={<MembersPage />} />
               <Route path="/simulator"    element={<Simulator />} />
             </Route>
           </Routes>

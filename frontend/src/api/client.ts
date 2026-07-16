@@ -96,3 +96,42 @@ export const getSlots = (params?: { status?: string; zone?: string }) =>
 // Reports
 export const getReports = (period: 'daily' | 'monthly') =>
   api.get('/reports', { params: { period } });
+
+// Tariffs
+export const getTariffs = () => api.get('/tariffs');
+export const createTariff = (data: {
+  vehicle_type: string;
+  first_hour_rate: number;
+  next_hour_rate: number;
+  max_daily_rate: number;
+}) => api.post('/tariffs', data);
+export const updateTariff = (id: string, data: {
+  first_hour_rate: number;
+  next_hour_rate: number;
+  max_daily_rate: number;
+  is_active: boolean;
+}) => api.put(`/tariffs/${id}`, data);
+
+// Members (subscription/discount)
+export const getMembers = () => api.get('/members');
+export const createMember = (data: {
+  plate_number: string;
+  member_name: string;
+  phone?: string;
+  membership_type: string;
+  discount_percent: number;
+  valid_from: string;
+  valid_until: string;
+  notes?: string;
+}) => api.post('/members', data);
+export const updateMember = (id: string, data: {
+  member_name: string;
+  phone?: string;
+  membership_type: string;
+  discount_percent: number;
+  valid_from: string;
+  valid_until: string;
+  is_active: boolean;
+  notes?: string;
+}) => api.put(`/members/${id}`, data);
+export const deleteMember = (id: string) => api.delete(`/members/${id}`);

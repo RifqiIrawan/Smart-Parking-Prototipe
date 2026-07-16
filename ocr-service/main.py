@@ -16,6 +16,16 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+# np.sctypes was removed in NumPy 2.0; imgaug (a PaddleOCR dependency) still uses it.
+if not hasattr(np, "sctypes"):
+    np.sctypes = {
+        "float": [np.float16, np.float32, np.float64],
+        "int": [np.int8, np.int16, np.int32, np.int64],
+        "uint": [np.uint8, np.uint16, np.uint32, np.uint64],
+        "complex": [np.complex64, np.complex128],
+        "others": [bool, object, bytes, str, np.void],
+    }
+
 # PaddleOCR - import lazily for startup speed
 try:
     from paddleocr import PaddleOCR

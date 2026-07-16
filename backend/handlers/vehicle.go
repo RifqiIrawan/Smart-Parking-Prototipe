@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/RifqiIrawan/smart-parking/backend/config"
@@ -161,18 +162,33 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 		return
 	}
 
-	// Find active transaction
+	if req.TicketNumber == "" && req.PlateNumber == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false, Message: "Nomor tiket atau plat nomor wajib diisi",
+		})
+		return
+	}
+
+	// Find active transaction — by ticket number (attended flow) or by plate
+	// number (unattended flow: camera/RFID detects the plate, no ticket needed)
+	lookupColumn := "t.ticket_number"
+	lookupValue := req.TicketNumber
+	if lookupValue == "" {
+		lookupColumn = "t.plate_number"
+		lookupValue = strings.ToUpper(strings.ReplaceAll(req.PlateNumber, " ", ""))
+	}
+
 	var tx models.ParkingTransaction
 	var slotID *string
 	var vehicleType string
-	err := h.DB.QueryRow(`
+	err := h.DB.QueryRow(fmt.Sprintf(`
 		SELECT t.id, t.ticket_number, t.vehicle_id, t.slot_id, t.entry_time,
 		       t.plate_number, t.base_rate, t.status,
 		       COALESCE(v.type, 'car') as vehicle_type
 		FROM parking_transactions t
 		LEFT JOIN vehicles v ON v.id = t.vehicle_id
-		WHERE t.ticket_number = $1 AND t.status = 'active'
-	`, req.TicketNumber).Scan(
+		WHERE %s = $1 AND t.status = 'active'
+	`, lookupColumn), lookupValue).Scan(
 		&tx.ID, &tx.TicketNumber, &tx.VehicleID, &slotID,
 		&tx.EntryTime, &tx.PlateNumber, &tx.BaseRate, &tx.Status,
 		&vehicleType,
@@ -211,13 +227,26 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 	}
 
 	hours := math.Ceil(float64(durationMinutes) / 60.0)
-	totalAmount := tariff.FirstHourRate
+	subtotal := tariff.FirstHourRate
 	if hours > 1 {
-		totalAmount += (hours - 1) * tariff.NextHourRate
+		subtotal += (hours - 1) * tariff.NextHourRate
 	}
-	if totalAmount > tariff.MaxDailyRate {
-		totalAmount = tariff.MaxDailyRate
+	if subtotal > tariff.MaxDailyRate {
+		subtotal = tariff.MaxDailyRate
 	}
+
+	// Apply member/subscription discount, if this plate has an active membership today
+	var memberID *string
+	var memberName string
+	var discountPercent float64
+	h.DB.QueryRow(`
+		SELECT id, member_name, discount_percent FROM members
+		WHERE plate_number = $1 AND is_active = true
+		  AND valid_from <= CURRENT_DATE AND valid_until >= CURRENT_DATE
+	`, tx.PlateNumber).Scan(&memberID, &memberName, &discountPercent)
+
+	discountAmount := subtotal * discountPercent / 100
+	totalAmount := subtotal - discountAmount
 
 	// Mark transaction completed (status pending payment, gate opens after payment)
 	var gateIDPtr *string
@@ -228,9 +257,10 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 	_, err = h.DB.Exec(`
 		UPDATE parking_transactions
 		SET exit_time=$1, duration_minutes=$2, total_amount=$3,
-		    status='completed', exit_gate_id=$4, plate_image_out=$5, updated_at=NOW()
-		WHERE id=$6
-	`, exitTime, durationMinutes, totalAmount, gateIDPtr, req.PlateImage, tx.ID)
+		    status='completed', exit_gate_id=$4, plate_image_out=$5,
+		    member_id=$6, discount_amount=$7, updated_at=NOW()
+		WHERE id=$8
+	`, exitTime, durationMinutes, totalAmount, gateIDPtr, req.PlateImage, memberID, discountAmount, tx.ID)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -249,12 +279,21 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 	tx.TotalAmount = totalAmount
 	tx.Status = "completed"
 
+	message := fmt.Sprintf("Kendaraan berhasil keluar. Total: Rp %.0f", totalAmount)
+	if memberID != nil {
+		message = fmt.Sprintf("Kendaraan berhasil keluar. Diskon member %s (%.0f%%) diterapkan. Total: Rp %.0f", memberName, discountPercent, totalAmount)
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Message: fmt.Sprintf("Kendaraan berhasil keluar. Total: Rp %.0f", totalAmount),
+		Message: message,
 		Data: gin.H{
 			"transaction":      tx,
 			"duration_minutes": durationMinutes,
+			"subtotal":         subtotal,
+			"discount_percent": discountPercent,
+			"discount_amount":  discountAmount,
+			"member_name":      memberName,
 			"total_amount":     totalAmount,
 			"vehicle_type":     vehicleType,
 		},

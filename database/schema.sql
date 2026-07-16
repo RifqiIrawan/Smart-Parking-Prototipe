@@ -153,6 +153,30 @@ INSERT INTO tariffs (vehicle_type, first_hour_rate, next_hour_rate, max_daily_ra
 ON CONFLICT DO NOTHING;
 
 -- =============================================
+-- TABLE: members (member/langganan discounts)
+-- =============================================
+CREATE TABLE IF NOT EXISTS members (
+    id               UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    plate_number     VARCHAR(20) UNIQUE NOT NULL,
+    member_name      VARCHAR(100) NOT NULL,
+    phone            VARCHAR(20),
+    membership_type  VARCHAR(30) DEFAULT 'monthly',
+    discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0 CHECK (discount_percent >= 0 AND discount_percent <= 100),
+    valid_from       DATE NOT NULL DEFAULT CURRENT_DATE,
+    valid_until      DATE NOT NULL,
+    is_active        BOOLEAN DEFAULT TRUE,
+    notes            TEXT,
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_members_plate ON members(plate_number);
+
+-- Link parking transactions to the member discount applied (if any)
+ALTER TABLE parking_transactions ADD COLUMN IF NOT EXISTS member_id UUID REFERENCES members(id);
+ALTER TABLE parking_transactions ADD COLUMN IF NOT EXISTS discount_amount DECIMAL(12,2) DEFAULT 0;
+
+-- =============================================
 -- INDEXES
 -- =============================================
 CREATE INDEX IF NOT EXISTS idx_transactions_plate ON parking_transactions(plate_number);
