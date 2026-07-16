@@ -137,7 +137,7 @@ CREATE TABLE IF NOT EXISTS payment_logs (
 -- =============================================
 CREATE TABLE IF NOT EXISTS tariffs (
     id              UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    vehicle_type    VARCHAR(20) NOT NULL,
+    vehicle_type    VARCHAR(20) NOT NULL UNIQUE,
     first_hour_rate DECIMAL(12,2) NOT NULL,
     next_hour_rate  DECIMAL(12,2) NOT NULL,
     max_daily_rate  DECIMAL(12,2),
@@ -146,11 +146,23 @@ CREATE TABLE IF NOT EXISTS tariffs (
     updated_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Re-running this file against a database created before vehicle_type was
+-- UNIQUE (e.g. via an older schema.sql) needs the constraint added explicitly,
+-- since CREATE TABLE IF NOT EXISTS won't alter an existing table.
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'tariffs_vehicle_type_key'
+    ) THEN
+        ALTER TABLE tariffs ADD CONSTRAINT tariffs_vehicle_type_key UNIQUE (vehicle_type);
+    END IF;
+END $$;
+
 INSERT INTO tariffs (vehicle_type, first_hour_rate, next_hour_rate, max_daily_rate) VALUES
 ('car',        5000, 3000, 50000),
 ('motorcycle', 2000, 1000, 20000),
 ('truck',      10000, 7000, 100000)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (vehicle_type) DO NOTHING;
 
 -- =============================================
 -- TABLE: members (member/langganan discounts)
