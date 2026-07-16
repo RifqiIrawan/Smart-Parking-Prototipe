@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS users (
 -- =============================================
 CREATE TABLE IF NOT EXISTS gates (
     id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    name        VARCHAR(100) NOT NULL,
+    name        VARCHAR(100) NOT NULL UNIQUE,
     type        VARCHAR(10) CHECK (type IN ('entry','exit')) NOT NULL,
     location    VARCHAR(200),
     status      VARCHAR(20) DEFAULT 'closed' CHECK (status IN ('open','closed','error')),
@@ -45,6 +45,18 @@ CREATE TABLE IF NOT EXISTS gates (
     created_at  TIMESTAMPTZ DEFAULT NOW(),
     updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Re-running this file against a database created before `name` was UNIQUE
+-- needs the constraint added explicitly, since CREATE TABLE IF NOT EXISTS
+-- won't alter an existing table (see the same fix applied to tariffs below).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'gates_name_key'
+    ) THEN
+        ALTER TABLE gates ADD CONSTRAINT gates_name_key UNIQUE (name);
+    END IF;
+END $$;
 
 -- =============================================
 -- TABLE: parking_slots
@@ -213,7 +225,7 @@ INSERT INTO gates (name, type, location, ip_address) VALUES
 ('Gate B - Masuk',  'entry', 'Pintu Selatan', '192.168.1.11'),
 ('Gate C - Keluar', 'exit',  'Pintu Utara', '192.168.1.12'),
 ('Gate D - Keluar', 'exit',  'Pintu Selatan', '192.168.1.13')
-ON CONFLICT DO NOTHING;
+ON CONFLICT (name) DO NOTHING;
 
 -- =============================================
 -- SEED: Sample Parking Slots (40 slots)
