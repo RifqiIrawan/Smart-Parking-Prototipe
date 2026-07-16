@@ -96,6 +96,8 @@ export const getSlots = (params?: { status?: string; zone?: string }) =>
 // Reports
 export const getReports = (period: 'daily' | 'monthly') =>
   api.get('/reports', { params: { period } });
+export const exportReportsXlsx = (period: 'daily' | 'monthly') =>
+  api.get('/reports/export', { params: { period }, responseType: 'blob' });
 
 // Tariffs
 export const getTariffs = () => api.get('/tariffs');

@@ -4,9 +4,11 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
+	"github.com/xuri/excelize/v2"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -170,54 +172,121 @@ func (h *UserHandler) ListRoles(c *gin.Context) {
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: roles})
 }
 
-func (h *UserHandler) GetReports(c *gin.Context) {
-	period := c.DefaultQuery("period", "daily")
+type ReportRow struct {
+	Period            string  `json:"period"`
+	TotalTransactions int     `json:"total_transactions"`
+	Completed         int     `json:"completed"`
+	Revenue           float64 `json:"revenue"`
+	DiscountGiven     float64 `json:"discount_given"`
+}
 
-	var groupBy, dateFormat string
+// fetchReportRows is shared by GetReports (JSON for the UI) and ExportReports
+// (Excel download) so the two can never drift out of sync with each other.
+func fetchReportRows(db *sql.DB, period string) ([]ReportRow, error) {
+	// FIX: the lookback window must scale with the grouping — a monthly
+	// report capped at 30 days can never show more than the current month,
+	// which made the "Bulanan" tab effectively identical to "Harian".
+	var groupBy, dateFormat, lookback string
 	switch period {
 	case "monthly":
 		groupBy = "DATE_TRUNC('month', entry_time)"
 		dateFormat = "YYYY-MM"
+		lookback = "12 months"
 	default: // daily
 		groupBy = "DATE(entry_time)"
 		dateFormat = "YYYY-MM-DD"
+		lookback = "30 days"
 	}
 
-	rows, err := h.DB.Query(fmt.Sprintf(`
+	rows, err := db.Query(fmt.Sprintf(`
 		SELECT
 			TO_CHAR(%s, '%s') as period,
 			COUNT(*) as total_transactions,
 			COUNT(CASE WHEN status='completed' THEN 1 END) as completed,
-			COALESCE(SUM(CASE WHEN status='completed' THEN total_amount END), 0) as revenue
+			COALESCE(SUM(CASE WHEN status='completed' THEN total_amount END), 0) as revenue,
+			COALESCE(SUM(CASE WHEN status='completed' THEN discount_amount END), 0) as discount_given
 		FROM parking_transactions
-		WHERE entry_time >= NOW() - INTERVAL '30 days'
+		WHERE entry_time >= NOW() - INTERVAL '%s'
 		GROUP BY %s
 		ORDER BY period DESC
 		LIMIT 30
-	`, groupBy, dateFormat, groupBy))
-
+	`, groupBy, dateFormat, lookback, groupBy))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
-	type Report struct {
-		Period            string  `json:"period"`
-		TotalTransactions int     `json:"total_transactions"`
-		Completed         int     `json:"completed"`
-		Revenue           float64 `json:"revenue"`
-	}
-
-	var reports []Report
+	var reports []ReportRow
 	for rows.Next() {
-		var r Report
-		rows.Scan(&r.Period, &r.TotalTransactions, &r.Completed, &r.Revenue)
+		var r ReportRow
+		if err := rows.Scan(&r.Period, &r.TotalTransactions, &r.Completed, &r.Revenue, &r.DiscountGiven); err != nil {
+			return nil, err
+		}
 		reports = append(reports, r)
+	}
+	return reports, nil
+}
+
+func (h *UserHandler) GetReports(c *gin.Context) {
+	period := c.DefaultQuery("period", "daily")
+
+	reports, err := fetchReportRows(h.DB, period)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
+		return
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: reports})
 }
 
-// needed for fmt in GetReports
-var _ = fmt.Sprintf
+// ExportReports streams the same report data as a real .xlsx workbook.
+func (h *UserHandler) ExportReports(c *gin.Context) {
+	period := c.DefaultQuery("period", "daily")
+
+	reports, err := fetchReportRows(h.DB, period)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
+		return
+	}
+
+	f := excelize.NewFile()
+	defer f.Close()
+	sheet := "Laporan"
+	f.SetSheetName("Sheet1", sheet)
+
+	headerStyle, _ := f.NewStyle(&excelize.Style{
+		Font: &excelize.Font{Bold: true, Color: "FFFFFF"},
+		Fill: excelize.Fill{Type: "pattern", Color: []string{"0EA5E9"}, Pattern: 1},
+	})
+
+	headers := []string{"Periode", "Total Transaksi", "Selesai", "Diskon Member (Rp)", "Pendapatan (Rp)"}
+	for i, hdr := range headers {
+		col, _ := excelize.CoordinatesToCellName(i+1, 1)
+		f.SetCellValue(sheet, col, hdr)
+	}
+	f.SetCellStyle(sheet, "A1", "E1", headerStyle)
+
+	for i, r := range reports {
+		row := i + 2
+		f.SetCellValue(sheet, fmt.Sprintf("A%d", row), r.Period)
+		f.SetCellValue(sheet, fmt.Sprintf("B%d", row), r.TotalTransactions)
+		f.SetCellValue(sheet, fmt.Sprintf("C%d", row), r.Completed)
+		f.SetCellValue(sheet, fmt.Sprintf("D%d", row), r.DiscountGiven)
+		f.SetCellValue(sheet, fmt.Sprintf("E%d", row), r.Revenue)
+	}
+	f.SetColWidth(sheet, "A", "A", 14)
+	f.SetColWidth(sheet, "B", "E", 18)
+
+	periodLabel := "harian"
+	if period == "monthly" {
+		periodLabel = "bulanan"
+	}
+	filename := fmt.Sprintf("laporan-%s-%s.xlsx", periodLabel, time.Now().Format("2006-01-02"))
+
+	c.Header("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+	c.Header("Content-Disposition", "attachment; filename="+filename)
+	if err := f.Write(c.Writer); err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Gagal membuat file Excel"})
+		return
+	}
+}

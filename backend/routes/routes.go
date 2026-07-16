@@ -82,6 +82,7 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		// Slots & Reports
 		api.GET("/slots", userH.GetSlots)
 		api.GET("/reports", userH.GetReports)
+		api.GET("/reports/export", userH.ExportReports)
 
 		// Tariffs (per vehicle-category hourly rates)
 		api.GET("/tariffs", tariffH.ListTariffs)

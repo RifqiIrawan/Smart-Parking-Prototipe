@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { getReports } from '../api/client';
+import { getReports, exportReportsXlsx } from '../api/client';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, FileSpreadsheet } from 'lucide-react';
 
 const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 
@@ -10,12 +10,14 @@ interface ReportItem {
   total_transactions: number;
   completed: number;
   revenue: number;
+  discount_given: number;
 }
 
 export const ReportsPage: React.FC = () => {
   const [period, setPeriod] = useState<'daily' | 'monthly'>('daily');
   const [data, setData] = useState<ReportItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   const fetchData = async () => {
     setLoading(true);
@@ -31,8 +33,27 @@ export const ReportsPage: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [period]);
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await exportReportsXlsx(period);
+      const blob = new Blob([res.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `laporan-${period === 'daily' ? 'harian' : 'bulanan'}-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const totalRevenue = data.reduce((s, d) => s + d.revenue, 0);
   const totalTx = data.reduce((s, d) => s + d.total_transactions, 0);
+  const totalDiscount = data.reduce((s, d) => s + d.discount_given, 0);
   const avgRevenue = data.length > 0 ? totalRevenue / data.length : 0;
 
   return (
@@ -48,17 +69,27 @@ export const ReportsPage: React.FC = () => {
             {p === 'daily' ? '📅 Harian' : '📆 Bulanan'}
           </button>
         ))}
-        <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto' }} onClick={fetchData}>
+        <button
+          className="btn btn-secondary btn-sm"
+          style={{ marginLeft: 'auto' }}
+          onClick={handleExport}
+          disabled={data.length === 0 || exporting}
+        >
+          {exporting ? <span className="spinner" style={{ width: 14, height: 14 }} /> : <FileSpreadsheet size={14} />}
+          {exporting ? 'Membuat file...' : 'Export ke Excel'}
+        </button>
+        <button className="btn btn-secondary btn-sm" onClick={fetchData}>
           <RefreshCw size={14} /> Refresh
         </button>
       </div>
 
       {/* Summary */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '1rem', marginBottom: '1.5rem' }}>
         {[
           { label: 'Total Pendapatan', val: formatRp(totalRevenue), color: 'cyan' },
           { label: 'Total Transaksi', val: totalTx.toString(), color: 'blue' },
           { label: `Rata-rata per ${period === 'daily' ? 'Hari' : 'Bulan'}`, val: formatRp(avgRevenue), color: 'green' },
+          { label: 'Total Diskon Member', val: formatRp(totalDiscount), color: 'purple' },
         ].map(({ label, val, color }) => (
           <div key={label} className={`stat-card ${color}`}>
             <span className="stat-label">{label}</span>
@@ -104,6 +135,7 @@ export const ReportsPage: React.FC = () => {
                   <th>Periode</th>
                   <th>Total Transaksi</th>
                   <th>Selesai</th>
+                  <th>Diskon Member</th>
                   <th>Pendapatan</th>
                 </tr>
               </thead>
@@ -114,6 +146,9 @@ export const ReportsPage: React.FC = () => {
                     <td>{item.total_transactions}</td>
                     <td>
                       <span className="badge badge-green">{item.completed}</span>
+                    </td>
+                    <td style={{ fontSize: 13, color: item.discount_given > 0 ? '#a78bfa' : 'var(--text-secondary)' }}>
+                      {item.discount_given > 0 ? `-${formatRp(item.discount_given)}` : '-'}
                     </td>
                     <td style={{ fontWeight: 700, color: 'var(--accent-amber)' }}>
                       {formatRp(item.revenue)}
