@@ -2,143 +2,147 @@ import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Car, LogOut as LogOutIcon, DoorOpen,
-  Receipt, Users, BarChart3, ParkingSquare, LogIn, Zap, Wallet, BadgePercent
+  Receipt, Users, BarChart3, ParkingSquare, LogIn, Zap,
+  MapPin, CreditCard, UserCheck,
 } from 'lucide-react';
 import { useAuth } from '../store/auth';
 
 const navItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/entry', icon: LogIn, label: 'Kendaraan Masuk' },
-  { to: '/exit', icon: LogOutIcon, label: 'Kendaraan Keluar' },
-  { to: '/slots', icon: ParkingSquare, label: 'Slot Parkir' },
-  { to: '/gates', icon: DoorOpen, label: 'Gate Monitor' },
-  { to: '/transactions', icon: Receipt, label: 'Transaksi' },
-  { to: '/tariffs', icon: Wallet, label: 'Tarif Parkir' },
-  { to: '/members', icon: BadgePercent, label: 'Member & Diskon' },
-  { to: '/reports', icon: BarChart3, label: 'Laporan' },
-  { to: '/users', icon: Users, label: 'Manajemen User' },
+  { to: '/dashboard',    icon: LayoutDashboard, label: 'Dashboard',         roles: [] },
+  { to: '/entry',        icon: LogIn,           label: 'Kendaraan Masuk',   roles: [] },
+  { to: '/exit',         icon: LogOutIcon,      label: 'Kendaraan Keluar',  roles: [] },
+  { to: '/slots',        icon: ParkingSquare,   label: 'Slot Parkir',       roles: [] },
+  { to: '/gates',        icon: DoorOpen,        label: 'Gate Monitor',      roles: [] },
+  { to: '/transactions', icon: Receipt,         label: 'Transaksi',         roles: [] },
+  { to: '/members',      icon: UserCheck,       label: 'Member',            roles: [] },
+  { to: '/tariffs',      icon: CreditCard,      label: 'Tarif',             roles: ['super_admin','admin'] },
+  { to: '/reports',      icon: BarChart3,       label: 'Laporan',           roles: [] },
+  { to: '/users',        icon: Users,           label: 'Manajemen User',    roles: ['super_admin','admin'] },
+  { to: '/locations',    icon: MapPin,          label: 'Lokasi',            roles: ['super_admin','admin'] },
 ];
 
 const simulatorItem = { to: '/simulator', icon: Zap, label: 'Simulator' };
 
 export const Sidebar: React.FC = () => {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user, logout, isSuperAdmin, locationLabel } = useAuth();
+  const navigate  = useNavigate();
+  const role      = user?.role_name || '';
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  const handleLogout = () => { logout(); navigate('/login'); };
 
   const linkStyle = (isActive: boolean): React.CSSProperties => ({
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '0.6rem 1rem',
-    borderRadius: 8,
+    display: 'flex', alignItems: 'center', gap: 10,
+    padding: '0.6rem 1rem', borderRadius: 8,
     color: isActive ? 'var(--accent-cyan)' : 'var(--text-secondary)',
     background: isActive ? 'var(--accent-cyan-10)' : 'transparent',
-    fontWeight: isActive ? 600 : 400,
-    fontSize: 13,
-    textDecoration: 'none',
-    transition: 'all 0.15s',
+    fontWeight: isActive ? 600 : 400, fontSize: 13,
+    textDecoration: 'none', transition: 'all 0.15s',
   });
+
+  const visibleItems = navItems.filter(item =>
+    item.roles.length === 0 || item.roles.includes(role)
+  );
 
   return (
     <aside style={{
-      width: 'var(--sidebar-w)',
-      height: '100vh',
-      background: 'var(--bg-secondary)',
-      borderRight: '1px solid var(--border)',
-      display: 'flex',
-      flexDirection: 'column',
-      position: 'fixed',
-      left: 0,
-      top: 0,
-      zIndex: 100,
+      width: 'var(--sidebar-w)', height: '100vh',
+      background: 'var(--bg-secondary)', borderRight: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column',
+      position: 'fixed', left: 0, top: 0, zIndex: 100,
     }}>
       {/* Logo */}
-      <div style={{ padding: '1.5rem', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <div style={{ padding: '1.25rem', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
           <div style={{
-            width: 36, height: 36,
+            width: 34, height: 34,
             background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))',
-            borderRadius: 10,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-            <Car size={20} color="#0a0e1a" strokeWidth={2.5} />
+            <Car size={18} color="#0a0e1a" strokeWidth={2.5} />
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, color: 'var(--accent-cyan)', lineHeight: 1 }}>
-              SMART
-            </div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 13, lineHeight: 1 }}>
-              PARKING
-            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 12, color: 'var(--accent-cyan)', lineHeight: 1 }}>SMART</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 12, lineHeight: 1 }}>PARKING</div>
           </div>
+        </div>
+
+        {/* Location badge */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          background: isSuperAdmin ? '#f59e0b10' : '#38bdf810',
+          border: `1px solid ${isSuperAdmin ? '#f59e0b30' : '#38bdf830'}`,
+          borderRadius: 6, padding: '4px 8px',
+        }}>
+          <MapPin size={11} color={isSuperAdmin ? '#f59e0b' : '#38bdf8'} />
+          <span style={{
+            fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
+            overflow: 'hidden', textOverflow: 'ellipsis',
+            color: isSuperAdmin ? '#f59e0b' : '#38bdf8',
+          }}>
+            {locationLabel}
+          </span>
+          {isSuperAdmin && (
+            <span style={{
+              fontSize: 8, background: '#f59e0b', color: '#000',
+              padding: '1px 4px', borderRadius: 3, fontWeight: 700, marginLeft: 'auto',
+            }}>SUPER</span>
+          )}
         </div>
       </div>
 
       {/* Nav */}
-      <nav style={{ flex: 1, padding: '0.75rem', overflowY: 'auto' }}>
-        <div style={{ marginBottom: '1rem' }}>
-          {navItems.map(({ to, icon: Icon, label }) => (
-            <NavLink key={to} to={to} style={({ isActive }) => linkStyle(isActive)}>
-              <Icon size={16} />
-              {label}
-            </NavLink>
-          ))}
-        </div>
+      <nav style={{ flex: 1, padding: '0.625rem', overflowY: 'auto' }}>
+        {visibleItems.map(({ to, icon: Icon, label }) => (
+          <NavLink key={to} to={to} style={({ isActive }) => linkStyle(isActive)}>
+            <Icon size={15} />
+            {label}
+          </NavLink>
+        ))}
 
-        {/* Divider */}
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: '0.75rem' }}>
-          <div style={{ fontSize: 10, color: '#475569', padding: '0 0.5rem', marginBottom: 4, textTransform: 'uppercase', letterSpacing: 1 }}>
-            Simulator
-          </div>
+        {/* Simulator (divider) */}
+        <div style={{ borderTop: '1px solid var(--border)', margin: '0.5rem 0', paddingTop: '0.5rem' }}>
           <NavLink to={simulatorItem.to} style={({ isActive }) => ({
             ...linkStyle(isActive),
             background: isActive ? '#38bdf820' : '#38bdf808',
             color: isActive ? 'var(--accent-cyan)' : '#94a3b8',
             border: `1px solid ${isActive ? '#38bdf840' : '#38bdf815'}`,
+            fontSize: 12,
           })}>
-            <simulatorItem.icon size={16} />
+            <simulatorItem.icon size={14} />
             {simulatorItem.label}
-            <span style={{
-              marginLeft: 'auto', fontSize: 9, background: '#38bdf820',
-              color: '#38bdf8', padding: '1px 5px', borderRadius: 3,
-            }}>MQTT</span>
+            <span style={{ marginLeft:'auto', fontSize:8, background:'#38bdf820', color:'#38bdf8', padding:'1px 4px', borderRadius:3 }}>MQTT</span>
           </NavLink>
         </div>
       </nav>
 
       {/* User info */}
-      <div style={{ padding: '1rem', borderTop: '1px solid var(--border)' }}>
+      <div style={{ padding: '0.875rem', borderTop: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <div style={{
-            width: 32, height: 32, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #38bdf8, #818cf8)',
+            width: 30, height: 30, borderRadius: '50%',
+            background: isSuperAdmin
+              ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
+              : 'linear-gradient(135deg, #38bdf8, #818cf8)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 13, fontWeight: 700, color: '#0a0e1a',
+            fontSize: 12, fontWeight: 700, color: '#0a0e1a',
           }}>
             {user?.name?.[0]?.toUpperCase() || 'A'}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {user?.name || 'Admin'}
+              {user?.name}
             </div>
-            <div style={{ fontSize: 10, color: '#64748b' }}>{user?.role_name || 'admin'}</div>
+            <div style={{ fontSize: 10, color: '#64748b' }}>
+              {role === 'super_admin' ? '⭐ Super Admin' : role}
+            </div>
           </div>
         </div>
-        <button
-          onClick={handleLogout}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 8,
-            padding: '0.5rem 0.75rem', borderRadius: 6, border: 'none',
-            background: '#ef444415', color: '#ef4444', cursor: 'pointer', fontSize: 12,
-          }}
-        >
-          <LogOutIcon size={14} />
-          Logout
+        <button onClick={handleLogout} style={{
+          width: '100%', display: 'flex', alignItems: 'center', gap: 8,
+          padding: '0.45rem 0.75rem', borderRadius: 6, border: 'none',
+          background: '#ef444415', color: '#ef4444', cursor: 'pointer', fontSize: 12,
+        }}>
+          <LogOutIcon size={13} /> Logout
         </button>
       </div>
     </aside>

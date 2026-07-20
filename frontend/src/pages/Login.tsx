@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Car, Lock, Mail, AlertCircle } from 'lucide-react';
-import { login } from '../api/client';
 import { useAuth } from '../store/auth';
 
 export const LoginPage: React.FC = () => {
@@ -9,7 +8,7 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('admin123');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const { setAuth } = useAuth();
+  const { login: authLogin } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -17,9 +16,7 @@ export const LoginPage: React.FC = () => {
     setLoading(true);
     setError('');
     try {
-      const res = await login(email, password);
-      const { token, user } = res.data.data;
-      setAuth(user, token);
+      await authLogin(email, password);
       navigate('/dashboard');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Login gagal';

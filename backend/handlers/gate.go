@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/RifqiIrawan/smart-parking/backend/config"
+	"github.com/RifqiIrawan/smart-parking/backend/middleware"
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
 )
@@ -19,10 +20,21 @@ func NewGateHandler(db *sql.DB) *GateHandler {
 }
 
 func (h *GateHandler) ListGates(c *gin.Context) {
-	rows, err := h.DB.Query(`
-		SELECT id, name, type, location, status, ip_address, is_active, created_at, updated_at
-		FROM gates ORDER BY name
-	`)
+	locID, isSuper := middleware.GetLocationFilter(c)
+
+	query := `SELECT g.id, g.name, g.type, g.location, g.status, g.ip_address,
+	                 g.location_id, COALESCE(l.name,'') AS location_name,
+	                 g.is_active, g.created_at, g.updated_at
+	          FROM gates g
+	          LEFT JOIN locations l ON l.id = g.location_id`
+	var args []interface{}
+	if !isSuper && locID != nil {
+		query += " WHERE g.location_id = $1"
+		args = append(args, *locID)
+	}
+	query += " ORDER BY g.name"
+
+	rows, err := h.DB.Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Failed"})
 		return
@@ -32,7 +44,8 @@ func (h *GateHandler) ListGates(c *gin.Context) {
 	var gates []models.Gate
 	for rows.Next() {
 		var g models.Gate
-		rows.Scan(&g.ID, &g.Name, &g.Type, &g.Location, &g.Status, &g.IPAddress, &g.IsActive, &g.CreatedAt, &g.UpdatedAt)
+		rows.Scan(&g.ID, &g.Name, &g.Type, &g.Location, &g.Status, &g.IPAddress,
+			&g.LocationID, &g.LocationName, &g.IsActive, &g.CreatedAt, &g.UpdatedAt)
 		gates = append(gates, g)
 	}
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Data: gates})
@@ -60,10 +73,14 @@ func (h *GateHandler) CreateGate(c *gin.Context) {
 		return
 	}
 
+	locID, _ := middleware.GetLocationFilter(c)
+	var locIDPtr *string
+	if locID != nil { locIDPtr = locID }
+
 	err := h.DB.QueryRow(`
-		INSERT INTO gates (name, type, location, ip_address)
-		VALUES ($1, $2, $3, $4) RETURNING id, created_at, updated_at
-	`, g.Name, g.Type, g.Location, g.IPAddress).Scan(&g.ID, &g.CreatedAt, &g.UpdatedAt)
+		INSERT INTO gates (name, type, location, ip_address, location_id)
+		VALUES ($1, $2, $3, $4, $5) RETURNING id, created_at, updated_at
+	`, g.Name, g.Type, g.Location, g.IPAddress, locIDPtr).Scan(&g.ID, &g.CreatedAt, &g.UpdatedAt)
 
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})

@@ -2,42 +2,80 @@ package models
 
 import "time"
 
-// User represents a system user
-type User struct {
+
+// Location represents a parking site / branch
+type Location struct {
 	ID        string    `json:"id"`
 	Name      string    `json:"name"`
+	Code      string    `json:"code"`
+	Address   string    `json:"address"`
+	City      string    `json:"city"`
+	Phone     string    `json:"phone"`
 	Email     string    `json:"email"`
-	Password  string    `json:"-"`
-	RoleID    int       `json:"role_id"`
-	RoleName  string    `json:"role_name,omitempty"`
+	Capacity  int       `json:"capacity"`
 	IsActive  bool      `json:"is_active"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+	// Runtime stats
+	ActiveSlots    int `json:"active_slots,omitempty"`
+	OccupiedSlots  int `json:"occupied_slots,omitempty"`
+}
+
+// LocationRequest for create/update
+type LocationRequest struct {
+	Name     string `json:"name"     binding:"required"`
+	Code     string `json:"code"     binding:"required"`
+	Address  string `json:"address"`
+	City     string `json:"city"`
+	Phone    string `json:"phone"`
+	Email    string `json:"email"`
+	Capacity int    `json:"capacity"`
+	IsActive bool   `json:"is_active"`
+}
+
+// User represents a system user
+type User struct {
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Email        string    `json:"email"`
+	Password     string    `json:"-"`
+	RoleID       int       `json:"role_id"`
+	RoleName     string    `json:"role_name,omitempty"`
+	LocationID   *string   `json:"location_id"`
+	LocationName string    `json:"location_name,omitempty"`
+	LocationCode string    `json:"location_code,omitempty"`
+	IsActive     bool      `json:"is_active"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Gate represents a parking gate
 type Gate struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Type      string    `json:"type"` // entry | exit
-	Location  string    `json:"location"`
-	Status    string    `json:"status"` // open | closed | error
-	IPAddress string    `json:"ip_address"`
-	IsActive  bool      `json:"is_active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	Name         string    `json:"name"`
+	Type         string    `json:"type"`   // entry | exit
+	Location     string    `json:"location"`
+	Status       string    `json:"status"` // open | closed | error
+	IPAddress    string    `json:"ip_address"`
+	LocationID   *string   `json:"location_id"`
+	LocationName string    `json:"location_name,omitempty"`
+	IsActive     bool      `json:"is_active"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // ParkingSlot represents a parking space
 type ParkingSlot struct {
-	ID          string    `json:"id"`
-	SlotNumber  string    `json:"slot_number"`
-	Floor       string    `json:"floor"`
-	Zone        string    `json:"zone"`
-	Type        string    `json:"type"`   // regular | vip | handicap | motorcycle
-	Status      string    `json:"status"` // available | occupied | reserved | maintenance
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID           string    `json:"id"`
+	SlotNumber   string    `json:"slot_number"`
+	Floor        string    `json:"floor"`
+	Zone         string    `json:"zone"`
+	Type         string    `json:"type"`   // regular | vip | handicap | motorcycle
+	Status       string    `json:"status"` // available | occupied | reserved | maintenance
+	LocationID   *string   `json:"location_id"`
+	LocationName string    `json:"location_name,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // Vehicle represents a registered vehicle
@@ -77,6 +115,7 @@ type ParkingTransaction struct {
 	EntryGateName   string     `json:"entry_gate_name,omitempty"`
 	ExitGateName    string     `json:"exit_gate_name,omitempty"`
 	OperatorName    string     `json:"operator_name,omitempty"`
+	LocationID      *string    `json:"location_id,omitempty"`
 	CreatedAt       time.Time  `json:"created_at"`
 	UpdatedAt       time.Time  `json:"updated_at"`
 }
@@ -148,14 +187,16 @@ type MemberRequest struct {
 
 // DashboardStats for the dashboard overview
 type DashboardStats struct {
-	TotalSlots       int     `json:"total_slots"`
-	AvailableSlots   int     `json:"available_slots"`
-	OccupiedSlots    int     `json:"occupied_slots"`
-	ActiveTransactions int   `json:"active_transactions"`
-	TodayRevenue     float64 `json:"today_revenue"`
-	TodayTransactions int    `json:"today_transactions"`
-	MonthRevenue     float64 `json:"month_revenue"`
-	OccupancyRate    float64 `json:"occupancy_rate"`
+	TotalSlots         int     `json:"total_slots"`
+	AvailableSlots     int     `json:"available_slots"`
+	OccupiedSlots      int     `json:"occupied_slots"`
+	ActiveTransactions int     `json:"active_transactions"`
+	TodayRevenue       float64 `json:"today_revenue"`
+	TodayTransactions  int     `json:"today_transactions"`
+	MonthRevenue       float64 `json:"month_revenue"`
+	OccupancyRate      float64 `json:"occupancy_rate"`
+	LocationID         *string `json:"location_id,omitempty"`
+	LocationName       string  `json:"location_name,omitempty"`
 }
 
 // LoginRequest for auth

@@ -1,55 +1,74 @@
-import React, { createContext, useContext, useState } from 'react';
-import type { User } from '../types';
+import React, { createContext, useContext, useState, useEffect } from 'react';
+import apiClient from '../api/client';
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+  role_id: number;
+  role_name: string;
+  location_id: string | null;
+  location_name: string;
+  location_code: string;
+  is_active: boolean;
+}
 
 interface AuthContextType {
   user: User | null;
   token: string | null;
-  isAuthenticated: boolean;
-  setAuth: (user: User, token: string) => void;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
+  isSuperAdmin: boolean;
+  locationLabel: string;  // "Gedung Pusat (PST)" or "Semua Lokasi"
 }
 
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  token: null,
-  isAuthenticated: false,
-  setAuth: () => {},
-  logout: () => {} });
+const AuthContext = createContext<AuthContextType | null>(null);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const stored = localStorage.getItem('sp_user');
-      return stored ? JSON.parse(stored) : null;
-    } catch {
-      return null;
-    }
-  });
-  const [token, setToken] = useState<string | null>(() =>
-    localStorage.getItem('sp_token')
-  );
+  const [user,  setUser]  = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
 
-  const setAuth = (user: User, token: string) => {
-    setUser(user);
-    setToken(token);
-    localStorage.setItem('sp_user', JSON.stringify(user));
-    localStorage.setItem('sp_token', token);
+  useEffect(() => {
+    if (token) {
+      apiClient.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      // Reload user info
+      apiClient.get('/me').then(r => setUser(r.data.data)).catch(() => logout());
+    }
+  }, [token]);
+
+  const login = async (email: string, password: string) => {
+    const res = await apiClient.post('/login', { email, password });
+    const { token: t, user: u } = res.data.data;
+    localStorage.setItem('token', t);
+    apiClient.defaults.headers.common['Authorization'] = `Bearer ${t}`;
+    setToken(t);
+    setUser(u);
   };
 
   const logout = () => {
-    setUser(null);
+    localStorage.removeItem('token');
+    delete apiClient.defaults.headers.common['Authorization'];
     setToken(null);
-    localStorage.removeItem('sp_user');
-    localStorage.removeItem('sp_token');
+    setUser(null);
   };
 
+  const isSuperAdmin = user?.role_name === 'super_admin';
+
+  const locationLabel = isSuperAdmin
+    ? 'Semua Lokasi'
+    : user?.location_name
+      ? `${user.location_name}${user.location_code ? ` (${user.location_code})` : ''}`
+      : 'Lokasi tidak diset';
+
   return (
-    <AuthContext.Provider
-      value={{ user, token, isAuthenticated: !!token && !!user, setAuth, logout }}
-    >
+    <AuthContext.Provider value={{ user, token, login, logout, isSuperAdmin, locationLabel }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const useAuth = () => useContext(AuthContext);
+export const useAuth = () => {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error('useAuth must be used within AuthProvider');
+  return ctx;
+};

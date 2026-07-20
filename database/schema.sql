@@ -250,3 +250,85 @@ BEGIN
         ) ON CONFLICT DO NOTHING;
     END LOOP;
 END $$;
+
+-- ============================================================
+-- MULTI-LOCATION FEATURE
+-- ============================================================
+
+-- Tabel lokasi/cabang parkir
+CREATE TABLE IF NOT EXISTS locations (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name        VARCHAR(100) NOT NULL,
+    code        VARCHAR(20)  NOT NULL UNIQUE,  -- singkatan, misal: "PST", "MDN"
+    address     TEXT,
+    city        VARCHAR(100),
+    phone       VARCHAR(30),
+    email       VARCHAR(100),
+    capacity    INT DEFAULT 0,                  -- total kapasitas slot
+    is_active   BOOLEAN DEFAULT true,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Role super_admin
+INSERT INTO roles (name) VALUES ('super_admin') ON CONFLICT DO NOTHING;
+
+-- Tambah kolom location_id ke tabel yang perlu
+ALTER TABLE users              ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id);
+ALTER TABLE gates              ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id);
+ALTER TABLE parking_slots      ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id);
+ALTER TABLE parking_transactions ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id);
+ALTER TABLE tariffs            ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id);
+ALTER TABLE members            ADD COLUMN IF NOT EXISTS location_id UUID REFERENCES locations(id);
+
+-- Index untuk performa filter
+CREATE INDEX IF NOT EXISTS idx_users_location       ON users(location_id);
+CREATE INDEX IF NOT EXISTS idx_gates_location       ON gates(location_id);
+CREATE INDEX IF NOT EXISTS idx_slots_location       ON parking_slots(location_id);
+CREATE INDEX IF NOT EXISTS idx_transactions_location ON parking_transactions(location_id);
+CREATE INDEX IF NOT EXISTS idx_tariffs_location     ON tariffs(location_id);
+
+-- Seed lokasi default
+INSERT INTO locations (name, code, address, city, phone, capacity) VALUES
+    ('Gedung Pusat', 'PST', 'Jl. Sudirman No. 1, Jakarta Pusat', 'Jakarta', '021-5555001', 100),
+    ('Cabang Merdeka', 'MRD', 'Jl. Merdeka No. 25, Jakarta Barat', 'Jakarta', '021-5555002', 60),
+    ('Cabang Selatan', 'SLT', 'Jl. TB Simatupang No. 10, Jakarta Selatan', 'Jakarta', '021-5555003', 80)
+ON CONFLICT (code) DO NOTHING;
+
+-- Update admin user → super_admin (role_id baru)
+UPDATE users SET role_id = (SELECT id FROM roles WHERE name='super_admin' LIMIT 1)
+WHERE email = 'admin@smartparking.id';
+-- Juga set location_id = NULL agar super_admin tidak terbatas lokasi
+UPDATE users SET location_id = NULL WHERE email = 'admin@smartparking.id';
+
+-- Seed operator per lokasi (password: operator123)
+INSERT INTO users (name, email, password, role_id, location_id)
+SELECT
+    'Operator Pusat',
+    'operator.pusat@smartparking.id',
+    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- operator123
+    (SELECT id FROM roles WHERE name='operator'),
+    (SELECT id FROM locations WHERE code='PST')
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='operator.pusat@smartparking.id');
+
+INSERT INTO users (name, email, password, role_id, location_id)
+SELECT
+    'Admin Merdeka',
+    'admin.merdeka@smartparking.id',
+    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- operator123
+    (SELECT id FROM roles WHERE name='admin'),
+    (SELECT id FROM locations WHERE code='MRD')
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='admin.merdeka@smartparking.id');
+
+-- Update gates dengan location_id
+UPDATE gates SET location_id = (SELECT id FROM locations WHERE code='PST')
+WHERE location_id IS NULL AND name LIKE '%Masuk%';
+UPDATE gates SET location_id = (SELECT id FROM locations WHERE code='PST')
+WHERE location_id IS NULL AND name LIKE '%Keluar%';
+
+-- Update slots dengan location_id (semua ke PST default)
+UPDATE parking_slots SET location_id = (SELECT id FROM locations WHERE code='PST')
+WHERE location_id IS NULL;
+
+-- Update tariffs agar berlaku global (location_id = NULL = berlaku semua lokasi)
+-- tariff dengan location_id tertentu akan override tariff global

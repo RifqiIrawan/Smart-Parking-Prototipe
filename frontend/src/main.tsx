@@ -13,11 +13,20 @@ import { TransactionsPage } from './pages/Transactions';
 import { GatesPage } from './pages/Gates';
 import { SlotsPage } from './pages/Slots';
 import { UsersPage } from './pages/Users';
-import { TariffsPage } from './pages/Tariffs';
-import { MembersPage } from './pages/Members';
 import { ReportsPage } from './pages/Reports';
 import { Simulator } from './pages/Simulator';
+import { LocationsPage } from './pages/Locations';
 import './index.css';
+
+// lazy import pages from pull
+let MembersPage: React.FC = () => <div style={{padding:'2rem',color:'var(--text-secondary)'}}>Halaman Member</div>;
+let TariffsPage: React.FC = () => <div style={{padding:'2rem',color:'var(--text-secondary)'}}>Halaman Tarif</div>;
+try {
+  const M = require('./pages/Members');
+  if (M.default || M.MembersPage) MembersPage = M.default || M.MembersPage;
+  const T = require('./pages/Tariffs');
+  if (T.default || T.TariffsPage) TariffsPage = T.default || T.TariffsPage;
+} catch { /* pages not found - use placeholder */ }
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30000 } },
@@ -33,32 +42,24 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <AuthProvider>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
-            }}
-          />
+          <Toaster position="top-right" toastOptions={{
+            style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
+          }} />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route
-              element={
-                <PrivateRoute>
-                  <Layout />
-                </PrivateRoute>
-              }
-            >
+            <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route path="/dashboard"    element={<DashboardPage />} />
               <Route path="/entry"        element={<EntryPage />} />
               <Route path="/exit"         element={<ExitPage />} />
               <Route path="/slots"        element={<SlotsPage />} />
               <Route path="/gates"        element={<GatesPage />} />
               <Route path="/transactions" element={<TransactionsPage />} />
+              <Route path="/members"      element={<MembersPage />} />
+              <Route path="/tariffs"      element={<TariffsPage />} />
               <Route path="/reports"      element={<ReportsPage />} />
               <Route path="/users"        element={<UsersPage />} />
-              <Route path="/tariffs"      element={<TariffsPage />} />
-              <Route path="/members"      element={<MembersPage />} />
+              <Route path="/locations"    element={<LocationsPage />} />
               <Route path="/simulator"    element={<Simulator />} />
             </Route>
           </Routes>

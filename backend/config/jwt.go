@@ -9,22 +9,26 @@ import (
 )
 
 type Claims struct {
-	UserID string `json:"user_id"`
-	Email  string `json:"email"`
-	Role   string `json:"role"`
+	UserID     string  `json:"user_id"`
+	Email      string  `json:"email"`
+	Role       string  `json:"role"`
+	LocationID *string `json:"location_id"` // nil = super_admin (semua lokasi)
+	LocationCode string `json:"location_code"`
 	jwt.RegisteredClaims
 }
 
-func GenerateToken(userID, email, role string) (string, error) {
+func GenerateToken(userID, email, role string, locationID *string, locationCode string) (string, error) {
 	secret := os.Getenv("JWT_SECRET")
 	if secret == "" {
 		secret = "smart-parking-secret-key-2024"
 	}
 
 	claims := Claims{
-		UserID: userID,
-		Email:  email,
-		Role:   role,
+		UserID:       userID,
+		Email:        email,
+		Role:         role,
+		LocationID:   locationID,
+		LocationCode: locationCode,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

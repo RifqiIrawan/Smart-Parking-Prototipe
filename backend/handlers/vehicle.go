@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/RifqiIrawan/smart-parking/backend/config"
+	"github.com/RifqiIrawan/smart-parking/backend/middleware"
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
 )
@@ -82,11 +83,17 @@ func (h *VehicleHandler) Entry(c *gin.Context) {
 		if vehicleType == "motorcycle" {
 			slotType = "motorcycle"
 		}
-		h.DB.QueryRow(`
+		locFilter := ""
+		locArgs := []interface{}{slotType}
+		if loc, _ := middleware.GetLocationFilter(c); loc != nil {
+			locFilter = "AND location_id = $2"
+			locArgs = append(locArgs, *loc)
+		}
+		h.DB.QueryRow(fmt.Sprintf(`
 			SELECT id FROM parking_slots
-			WHERE status = 'available' AND type = $1
+			WHERE status = 'available' AND type = $1 %s
 			ORDER BY slot_number LIMIT 1
-		`, slotType).Scan(&slotID)
+		`, locFilter), locArgs...).Scan(&slotID)
 	}
 
 	// Create transaction
@@ -102,14 +109,17 @@ func (h *VehicleHandler) Entry(c *gin.Context) {
 		slotIDPtr = &slotID
 	}
 
+	locIDFinal, _ := middleware.GetLocationFilter(c)
 	var tx models.ParkingTransaction
+	var locIDPtr *string
+	if locIDFinal != nil { locIDPtr = locIDFinal }
 	err = h.DB.QueryRow(`
 		INSERT INTO parking_transactions
-		(ticket_number, vehicle_id, slot_id, entry_gate_id, plate_number, plate_image_in, base_rate, status, operator_id)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8)
+		(ticket_number, vehicle_id, slot_id, entry_gate_id, plate_number, plate_image_in, base_rate, status, operator_id, location_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,'active',$8,$9)
 		RETURNING id, ticket_number, entry_time, status
 	`, ticketNumber, vehicleID, slotIDPtr, gateIDPtr,
-		req.PlateNumber, req.PlateImage, baseRate, operatorID,
+		req.PlateNumber, req.PlateImage, baseRate, operatorID, locIDPtr,
 	).Scan(&tx.ID, &tx.TicketNumber, &tx.EntryTime, &tx.Status)
 
 	if err != nil {
@@ -304,6 +314,7 @@ func (h *VehicleHandler) ListTransactions(c *gin.Context) {
 	status := c.DefaultQuery("status", "")
 	limit := c.DefaultQuery("limit", "50")
 	offset := c.DefaultQuery("offset", "0")
+	locID, isSuper := middleware.GetLocationFilter(c)
 
 	query := `
 		SELECT t.id, t.ticket_number, t.plate_number, t.entry_time, t.exit_time,
@@ -318,10 +329,23 @@ func (h *VehicleHandler) ListTransactions(c *gin.Context) {
 	`
 	args := []interface{}{}
 	argIdx := 1
+	conditions := []string{}
+
 	if status != "" {
-		query += fmt.Sprintf(" WHERE t.status = $%d", argIdx)
+		conditions = append(conditions, fmt.Sprintf("t.status = $%d", argIdx))
 		args = append(args, status)
 		argIdx++
+	}
+	if !isSuper && locID != nil {
+		conditions = append(conditions, fmt.Sprintf("t.location_id = $%d", argIdx))
+		args = append(args, *locID)
+		argIdx++
+	}
+	if len(conditions) > 0 {
+		query += " WHERE " + conditions[0]
+		for _, cond := range conditions[1:] {
+			query += " AND " + cond
+		}
 	}
 	query += fmt.Sprintf(" ORDER BY t.created_at DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
 	args = append(args, limit, offset)
