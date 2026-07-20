@@ -488,6 +488,7 @@ func (h *PaymentHandler) Callback(c *gin.Context) {
 	if err == nil && paymentID != "" {
 		if paymentStatus == "paid" {
 			h.markPaid(paymentID, transactionID, orderID, amount, "webhook")
+			config.LogAudit(h.DB, c, "UPDATE", "payment", paymentID, fmt.Sprintf("Payment %s dikonfirmasi via webhook Midtrans, Rp %.0f", orderID, amount))
 		} else {
 			paidAt := time.Now()
 			h.DB.Exec(`
@@ -546,6 +547,7 @@ func (h *PaymentHandler) SimulatePayment(c *gin.Context) {
 	}
 
 	h.markPaid(paymentID, transactionID, orderID, amount, "qris_simulator")
+	config.LogAudit(h.DB, c, "UPDATE", "payment", paymentID, fmt.Sprintf("Payment %s dikonfirmasi (simulator), Rp %.0f", orderID, amount))
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,

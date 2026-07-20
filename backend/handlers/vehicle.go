@@ -156,6 +156,8 @@ func (h *VehicleHandler) Entry(c *gin.Context) {
 	tx.PlateNumber = req.PlateNumber
 	tx.BaseRate = baseRate
 
+	config.LogAudit(h.DB, c, "CREATE", "vehicle_entry", tx.ID, fmt.Sprintf("Kendaraan %s masuk, tiket %s", req.PlateNumber, ticketNumber))
+
 	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
 		Message: fmt.Sprintf("Kendaraan %s berhasil masuk. Tiket: %s", req.PlateNumber, ticketNumber),
@@ -293,6 +295,8 @@ func (h *VehicleHandler) Exit(c *gin.Context) {
 	if memberID != nil {
 		message = fmt.Sprintf("Kendaraan berhasil keluar. Diskon member %s (%.0f%%) diterapkan. Total: Rp %.0f", memberName, discountPercent, totalAmount)
 	}
+
+	config.LogAudit(h.DB, c, "UPDATE", "vehicle_exit", tx.ID, fmt.Sprintf("Kendaraan %s keluar, total Rp %.0f", tx.PlateNumber, totalAmount))
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,

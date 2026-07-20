@@ -88,6 +88,7 @@ func (h *GateHandler) CreateGate(c *gin.Context) {
 	}
 	g.Status = "closed"
 	g.IsActive = true
+	config.LogAudit(h.DB, c, "CREATE", "gate", g.ID, fmt.Sprintf("Gate %s dibuat", g.Name))
 	c.JSON(http.StatusCreated, models.APIResponse{Success: true, Message: "Gate created", Data: g})
 }
 
@@ -108,6 +109,7 @@ func (h *GateHandler) UpdateGate(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
+	config.LogAudit(h.DB, c, "UPDATE", "gate", id, fmt.Sprintf("Gate %s diperbarui", g.Name))
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Gate updated"})
 }
 
@@ -141,6 +143,8 @@ func (h *GateHandler) ControlGate(c *gin.Context) {
 
 	// Publish MQTT command to ESP32/hardware
 	go config.PublishGateCommand(req.GateID, gateName, req.Command)
+
+	config.LogAudit(h.DB, c, "UPDATE", "gate", req.GateID, fmt.Sprintf("Gate %s di-%s manual", gateName, req.Command))
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,

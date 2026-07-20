@@ -3,7 +3,10 @@ import { vehicleExit, getGates } from '../api/client';
 import { createPayment, checkPaymentStatus, simulatePayment } from '../api/payment';
 import type { PaymentData } from '../api/payment';
 import type { Gate } from '../types';
-import { LogOut, CreditCard, CheckCircle, AlertCircle, QrCode, Clock, Zap, Landmark, Wallet, Banknote, Copy, Check } from 'lucide-react';
+import { LogOut, CreditCard, CheckCircle, AlertCircle, QrCode, Clock, Zap, Landmark, Wallet, Banknote, Copy, Check, Camera, Printer } from 'lucide-react';
+import { CameraScan } from '../components/CameraScan';
+import { PrintDocument } from '../components/PrintDocument';
+import { ReceiptPrintout } from '../components/ReceiptPrintout';
 
 const formatRp = (n: number) => `Rp ${n.toLocaleString('id-ID')}`;
 const formatDuration = (mins: number) => {
@@ -230,13 +233,18 @@ const PaymentPanel: React.FC<{
 // Main Exit Page
 // ──────────────────────────────────────────────────────────
 export const ExitPage: React.FC = () => {
+  const [mode,          setMode]          = useState<'ticket' | 'plate'>('ticket');
   const [ticketNumber,  setTicketNumber]  = useState('');
+  const [plateNumber,   setPlateNumber]   = useState('');
+  const [plateImage,    setPlateImage]    = useState('');
+  const [showCamera,    setShowCamera]    = useState(false);
+  const [showPrint,     setShowPrint]     = useState(false);
   const [gateId,        setGateId]        = useState('');
   const [gates,         setGates]         = useState<Gate[]>([]);
   const [loading,       setLoading]       = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('qris');
   const [exitResult, setExitResult] = useState<null | {
-    transaction: { id: string; ticket_number: string; plate_number: string; entry_time: string };
+    transaction: { id: string; ticket_number: string; plate_number: string; entry_time: string; exit_time?: string };
     duration_minutes: number;
     total_amount: number;
     subtotal?: number;
@@ -246,6 +254,7 @@ export const ExitPage: React.FC = () => {
   }>(null);
   const [activePayment, setActivePayment] = useState<PaymentData | null>(null);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+  const [paidReceipt, setPaidReceipt] = useState<{ exitResult: NonNullable<typeof exitResult>; method: string } | null>(null);
 
   useEffect(() => {
     getGates().then(r =>
@@ -260,7 +269,10 @@ export const ExitPage: React.FC = () => {
     setMessage(null);
     setActivePayment(null);
     try {
-      const res = await vehicleExit({ ticket_number: ticketNumber.toUpperCase(), gate_id: gateId });
+      const res = await vehicleExit(mode === 'ticket'
+        ? { ticket_number: ticketNumber.toUpperCase(), gate_id: gateId, plate_image: plateImage || undefined }
+        : { ticket_number: '', plate_number: plateNumber.toUpperCase().replace(/\s/g, ''), gate_id: gateId, plate_image: plateImage || undefined }
+      );
       setExitResult(res.data.data);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Tiket tidak ditemukan';
@@ -289,9 +301,12 @@ export const ExitPage: React.FC = () => {
 
   const handlePaymentPaid = () => {
     setMessage({ ok: true, text: `✅ Pembayaran ${formatRp(exitResult?.total_amount || 0)} berhasil! Gate terbuka.` });
+    if (exitResult) setPaidReceipt({ exitResult, method: paymentMethod });
     setActivePayment(null);
     setExitResult(null);
     setTicketNumber('');
+    setPlateNumber('');
+    setPlateImage('');
   };
 
   return (
@@ -314,6 +329,11 @@ export const ExitPage: React.FC = () => {
               : <AlertCircle size={16} color="#ef4444" style={{ flexShrink: 0, marginTop: 1 }} />
             }
             <span style={{ fontSize: 13 }}>{message.text}</span>
+            {message.ok && paidReceipt && (
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowPrint(true)} style={{ marginLeft: 'auto', gap: 6, flexShrink: 0 }}>
+                <Printer size={13} /> Cetak Struk
+              </button>
+            )}
           </div>
         )}
 
@@ -326,21 +346,54 @@ export const ExitPage: React.FC = () => {
               </div>
               <div>
                 <div style={{ fontWeight: 600 }}>Cari Tiket Parkir</div>
-                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Masukkan nomor tiket kendaraan</div>
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Masukkan nomor tiket atau scan plat nomor</div>
               </div>
             </div>
 
+            <div style={{ display: 'flex', background: 'var(--bg-primary)', borderRadius: 8, padding: 3, marginBottom: '1rem', width: 'fit-content' }}>
+              {(['ticket', 'plate'] as const).map(m => (
+                <button key={m} type="button" onClick={() => { setMode(m); setTicketNumber(''); setPlateNumber(''); setPlateImage(''); }} style={{
+                  background: mode === m ? 'var(--bg-secondary)' : 'transparent',
+                  border: mode === m ? '1px solid var(--border)' : '1px solid transparent',
+                  borderRadius: 6, padding: '5px 16px', cursor: 'pointer', fontSize: 12,
+                  color: mode === m ? 'var(--accent-cyan)' : 'var(--text-secondary)', fontWeight: mode === m ? 700 : 400,
+                }}>
+                  {m === 'ticket' ? '🎫 Nomor Tiket' : '🚗 Plat Nomor'}
+                </button>
+              ))}
+            </div>
+
             <form onSubmit={handleExit}>
-              <div className="form-group">
-                <label className="form-label">Nomor Tiket</label>
-                <input
-                  className="form-input"
-                  placeholder="TKT-20240115120000-1234"
-                  value={ticketNumber}
-                  onChange={e => setTicketNumber(e.target.value.toUpperCase())}
-                  required
-                />
-              </div>
+              {mode === 'ticket' ? (
+                <div className="form-group">
+                  <label className="form-label">Nomor Tiket</label>
+                  <input
+                    className="form-input"
+                    placeholder="TKT-20240115120000-1234"
+                    value={ticketNumber}
+                    onChange={e => setTicketNumber(e.target.value.toUpperCase())}
+                    required
+                  />
+                </div>
+              ) : (
+                <div className="form-group">
+                  <label className="form-label">Nomor Plat</label>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <input
+                      className="form-input"
+                      placeholder="B 1234 ABC"
+                      value={plateNumber}
+                      onChange={e => setPlateNumber(e.target.value.toUpperCase())}
+                      required
+                    />
+                    <button type="button" onClick={() => setShowCamera(true)} title="Scan via kamera"
+                      className="btn btn-secondary" style={{ padding: '0 16px' }}>
+                      <Camera size={18} />
+                    </button>
+                  </div>
+                  {plateImage && <span style={{ fontSize: 11, color: 'var(--accent-green)' }}>· foto plat tersimpan ✓</span>}
+                </div>
+              )}
               <div className="form-group">
                 <label className="form-label">Gate Keluar (opsional)</label>
                 <select className="form-input" value={gateId} onChange={e => setGateId(e.target.value)}>
@@ -456,6 +509,31 @@ export const ExitPage: React.FC = () => {
           </div>
         )}
       </div>
+
+      {showCamera && (
+        <CameraScan
+          onPlateDetected={(plate, image) => { setShowCamera(false); setPlateNumber(plate); setPlateImage(image); }}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
+      {showPrint && paidReceipt && (
+        <PrintDocument onClose={() => setShowPrint(false)}>
+          <ReceiptPrintout
+            ticketNumber={paidReceipt.exitResult.transaction.ticket_number}
+            plateNumber={paidReceipt.exitResult.transaction.plate_number}
+            entryTime={paidReceipt.exitResult.transaction.entry_time}
+            exitTime={paidReceipt.exitResult.transaction.exit_time}
+            durationMinutes={paidReceipt.exitResult.duration_minutes}
+            subtotal={paidReceipt.exitResult.subtotal ?? paidReceipt.exitResult.total_amount}
+            discountPercent={paidReceipt.exitResult.discount_percent}
+            discountAmount={paidReceipt.exitResult.discount_amount}
+            memberName={paidReceipt.exitResult.member_name}
+            totalAmount={paidReceipt.exitResult.total_amount}
+            paymentMethod={paidReceipt.method}
+          />
+        </PrintDocument>
+      )}
     </>
   );
 };

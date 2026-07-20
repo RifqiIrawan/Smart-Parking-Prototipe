@@ -8,20 +8,47 @@ const api = axios.create({
 
 // Request interceptor: attach token
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('sp_token');
+  const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
   return config;
 });
 
-// Response interceptor: handle 401
+// Response interceptor: on 401, try a silent refresh (once) using the
+// stored refresh token before giving up and bouncing to /login.
+let refreshInFlight: Promise<string | null> | null = null;
+
+const doSilentRefresh = async (): Promise<string | null> => {
+  const refreshToken = localStorage.getItem('refresh_token');
+  if (!refreshToken) return null;
+  try {
+    const res = await axios.post('/api/refresh-token', { refresh_token: refreshToken });
+    const { token, refresh_token } = res.data.data;
+    localStorage.setItem('token', token);
+    localStorage.setItem('refresh_token', refresh_token);
+    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    return token;
+  } catch {
+    return null;
+  }
+};
+
 api.interceptors.response.use(
   (res) => res,
-  (error) => {
-    if (error.response?.status === 401) {
-      localStorage.removeItem('sp_token');
-      localStorage.removeItem('sp_user');
+  async (error) => {
+    const original = error.config;
+    if (error.response?.status === 401 && !original?._retried) {
+      original._retried = true;
+      refreshInFlight = refreshInFlight || doSilentRefresh();
+      const newToken = await refreshInFlight;
+      refreshInFlight = null;
+      if (newToken) {
+        original.headers.Authorization = `Bearer ${newToken}`;
+        return api(original);
+      }
+      localStorage.removeItem('token');
+      localStorage.removeItem('refresh_token');
       window.location.href = '/login';
     }
     return Promise.reject(error);
@@ -35,6 +62,26 @@ export const login = (email: string, password: string) =>
   api.post('/login', { email, password });
 
 export const getMe = () => api.get('/me');
+
+export const logoutApi = (refresh_token?: string) =>
+  api.post('/logout', { refresh_token });
+
+export const refreshAccessToken = (refresh_token: string) =>
+  api.post('/refresh-token', { refresh_token });
+
+export const forgotPassword = (email: string) =>
+  api.post('/forgot-password', { email });
+
+export const resetPassword = (token: string, new_password: string) =>
+  api.post('/reset-password', { token, new_password });
+
+// Audit log
+export const getAuditLogs = (params?: {
+  entity_type?: string;
+  action?: string;
+  limit?: number;
+  offset?: number;
+}) => api.get('/audit-logs', { params });
 
 // Dashboard
 export const getDashboardStats = () => api.get('/dashboard');
@@ -90,8 +137,39 @@ export const deleteUser = (id: string) => api.delete(`/users/${id}`);
 export const getRoles = () => api.get('/roles');
 
 // Slots
-export const getSlots = (params?: { status?: string; zone?: string }) =>
+export const getSlots = (params?: { status?: string; zone?: string; location_id?: string }) =>
   api.get('/slots', { params });
+
+export const getSlotFloors = (params?: { location_id?: string }) =>
+  api.get('/slots/floors', { params });
+
+export const createSlot = (data: {
+  slot_number: string;
+  floor: string;
+  zone: string;
+  type?: string;
+  status?: string;
+  location_id?: string;
+}) => api.post('/slots', data);
+
+export const createSlotsBulk = (data: {
+  floor: string;
+  zone: string;
+  type?: string;
+  count: number;
+  prefix?: string;
+  location_id?: string;
+}) => api.post('/slots/bulk', data);
+
+export const updateSlot = (id: string, data: {
+  slot_number: string;
+  floor: string;
+  zone: string;
+  type: string;
+  status: string;
+}) => api.put(`/slots/${id}`, data);
+
+export const deleteSlot = (id: string) => api.delete(`/slots/${id}`);
 
 // Reports
 export const getReports = (period: 'daily' | 'monthly') =>

@@ -332,3 +332,94 @@ WHERE location_id IS NULL;
 
 -- Update tariffs agar berlaku global (location_id = NULL = berlaku semua lokasi)
 -- tariff dengan location_id tertentu akan override tariff global
+
+-- ============================================================
+-- MULTI-LOCATION: lengkapi gate & slot untuk Cabang Merdeka & Selatan
+-- (sebelumnya hanya Gedung Pusat yang punya gate/slot)
+-- ============================================================
+
+-- Gates: nama diberi prefix kode lokasi karena `gates.name` UNIQUE global
+INSERT INTO gates (name, type, location, ip_address, location_id) VALUES
+    ('MRD Gate A - Masuk',  'entry', 'Pintu Depan',  '192.168.2.10', (SELECT id FROM locations WHERE code='MRD')),
+    ('MRD Gate B - Keluar', 'exit',  'Pintu Depan',  '192.168.2.11', (SELECT id FROM locations WHERE code='MRD')),
+    ('SLT Gate A - Masuk',  'entry', 'Pintu Depan',  '192.168.3.10', (SELECT id FROM locations WHERE code='SLT')),
+    ('SLT Gate B - Keluar', 'exit',  'Pintu Depan',  '192.168.3.11', (SELECT id FROM locations WHERE code='SLT'))
+ON CONFLICT (name) DO NOTHING;
+
+-- Slots: 20 untuk Merdeka (MA01..MA20), 24 untuk Selatan (SA01..SA24)
+DO $$
+DECLARE
+    i INT;
+    loc_id UUID;
+    types VARCHAR[] := ARRAY['regular','regular','regular','motorcycle','vip'];
+BEGIN
+    loc_id := (SELECT id FROM locations WHERE code='MRD');
+    FOR i IN 1..20 LOOP
+        INSERT INTO parking_slots (slot_number, floor, zone, type, status, location_id)
+        VALUES ('MA' || LPAD(i::TEXT, 2, '0'), 'G', 'A', types[((i-1) % 5) + 1], 'available', loc_id)
+        ON CONFLICT DO NOTHING;
+    END LOOP;
+
+    loc_id := (SELECT id FROM locations WHERE code='SLT');
+    FOR i IN 1..24 LOOP
+        INSERT INTO parking_slots (slot_number, floor, zone, type, status, location_id)
+        VALUES ('SA' || LPAD(i::TEXT, 2, '0'), 'G', 'A', types[((i-1) % 5) + 1], 'available', loc_id)
+        ON CONFLICT DO NOTHING;
+    END LOOP;
+END $$;
+
+-- Seed operator untuk Cabang Selatan juga (password: operator123)
+INSERT INTO users (name, email, password, role_id, location_id)
+SELECT
+    'Operator Selatan',
+    'operator.selatan@smartparking.id',
+    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    (SELECT id FROM roles WHERE name='operator'),
+    (SELECT id FROM locations WHERE code='SLT')
+WHERE NOT EXISTS (SELECT 1 FROM users WHERE email='operator.selatan@smartparking.id');
+
+-- ============================================================
+-- AUDIT LOG
+-- ============================================================
+CREATE TABLE IF NOT EXISTS audit_logs (
+    id          UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id     UUID REFERENCES users(id),
+    user_name   VARCHAR(100),
+    user_email  VARCHAR(150),
+    action      VARCHAR(50)  NOT NULL,  -- CREATE | UPDATE | DELETE | LOGIN | LOGOUT
+    entity_type VARCHAR(50)  NOT NULL,  -- user | tariff | gate | location | member | vehicle | payment
+    entity_id   VARCHAR(100),
+    description TEXT,
+    ip_address  VARCHAR(50),
+    created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_entity   ON audit_logs(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_audit_logs_user      ON audit_logs(user_id);
+
+-- ============================================================
+-- AUTH: refresh tokens & password reset (forgot password)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(128) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens(user_id);
+CREATE INDEX IF NOT EXISTS idx_refresh_tokens_hash ON refresh_tokens(token_hash);
+
+CREATE TABLE IF NOT EXISTS password_resets (
+    id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id    UUID REFERENCES users(id) ON DELETE CASCADE,
+    token_hash VARCHAR(128) NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    used_at    TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_password_resets_hash ON password_resets(token_hash);

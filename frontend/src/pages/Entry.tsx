@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { vehicleEntry, getGates } from '../api/client';
 import type { Gate } from '../types';
-import { LogIn, CheckCircle, AlertCircle } from 'lucide-react';
+import { LogIn, CheckCircle, AlertCircle, Camera, Printer } from 'lucide-react';
+import { CameraScan } from '../components/CameraScan';
+import { PrintDocument } from '../components/PrintDocument';
+import { TicketPrintout } from '../components/TicketPrintout';
 
 export const EntryPage: React.FC = () => {
   const [plateNumber, setPlateNumber] = useState('');
@@ -10,6 +13,9 @@ export const EntryPage: React.FC = () => {
   const [gates, setGates] = useState<Gate[]>([]);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<null | { success: boolean; message: string; data?: unknown }>(null);
+  const [plateImage, setPlateImage] = useState('');
+  const [showCamera, setShowCamera] = useState(false);
+  const [showPrint, setShowPrint] = useState(false);
 
   useEffect(() => {
     getGates().then(r => setGates(r.data.data?.filter((g: Gate) => g.type === 'entry') || []));
@@ -23,9 +29,11 @@ export const EntryPage: React.FC = () => {
       const res = await vehicleEntry({
         plate_number: plateNumber.toUpperCase().replace(/\s/g, ''),
         vehicle_type: vehicleType,
-        gate_id: gateId });
+        gate_id: gateId,
+        plate_image: plateImage || undefined });
       setResult({ success: true, message: res.data.message, data: res.data.data });
       setPlateNumber('');
+      setPlateImage('');
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string } } })?.response?.data?.message || 'Gagal memproses masuk';
       setResult({ success: false, message: msg });
@@ -33,6 +41,9 @@ export const EntryPage: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const entryGateName = gates.find(g => g.id === gateId)?.name || '-';
+  const ticketData = result?.data as { ticket_number?: string; entry_time?: string } | undefined;
 
   return (
     <>
@@ -77,6 +88,11 @@ export const EntryPage: React.FC = () => {
                     </span>
                   </div>
                 )}
+                {result.success && (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowPrint(true)} style={{ marginTop: 10, gap: 6 }}>
+                    <Printer size={13} /> Cetak Tiket
+                  </button>
+                )}
               </div>
             </div>
           )}
@@ -84,17 +100,25 @@ export const EntryPage: React.FC = () => {
           <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="form-group">
               <label className="form-label">Nomor Plat Kendaraan *</label>
-              <input
-                type="text"
-                className="form-input"
-                style={{ fontFamily: 'var(--font-display)', fontSize: 20, textTransform: 'uppercase', letterSpacing: 2, textAlign: 'center' }}
-                value={plateNumber}
-                onChange={e => setPlateNumber(e.target.value.toUpperCase())}
-                placeholder="B 1234 ABC"
-                required
-                maxLength={12}
-              />
-              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Format: B 1234 ABC</span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ fontFamily: 'var(--font-display)', fontSize: 20, textTransform: 'uppercase', letterSpacing: 2, textAlign: 'center' }}
+                  value={plateNumber}
+                  onChange={e => setPlateNumber(e.target.value.toUpperCase())}
+                  placeholder="B 1234 ABC"
+                  required
+                  maxLength={12}
+                />
+                <button type="button" onClick={() => setShowCamera(true)} title="Scan via kamera"
+                  className="btn btn-secondary" style={{ padding: '0 16px' }}>
+                  <Camera size={18} />
+                </button>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                Format: B 1234 ABC {plateImage && <span style={{ color: 'var(--accent-green)' }}>· foto plat tersimpan ✓</span>}
+              </span>
             </div>
 
             <div className="form-group">
@@ -142,6 +166,25 @@ export const EntryPage: React.FC = () => {
           </ol>
         </div>
       </div>
+
+      {showCamera && (
+        <CameraScan
+          onPlateDetected={(plate, image) => { setShowCamera(false); setPlateNumber(plate); setPlateImage(image); }}
+          onClose={() => setShowCamera(false)}
+        />
+      )}
+
+      {showPrint && ticketData?.ticket_number && (
+        <PrintDocument onClose={() => setShowPrint(false)}>
+          <TicketPrintout
+            ticketNumber={ticketData.ticket_number}
+            plateNumber={result?.data ? (result.data as { plate_number?: string }).plate_number || '' : ''}
+            vehicleType={vehicleType}
+            entryTime={ticketData.entry_time || new Date().toISOString()}
+            gateName={entryGateName}
+          />
+        </PrintDocument>
+      )}
     </>
   );
 };

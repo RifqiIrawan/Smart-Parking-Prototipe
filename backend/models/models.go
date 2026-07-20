@@ -78,6 +78,28 @@ type ParkingSlot struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
+// SlotRequest for creating/updating a single parking slot
+type SlotRequest struct {
+	SlotNumber string `json:"slot_number" binding:"required"`
+	Floor      string `json:"floor" binding:"required"`
+	Zone       string `json:"zone" binding:"required"`
+	Type       string `json:"type"`
+	Status     string `json:"status"`
+	LocationID string `json:"location_id"`
+}
+
+// BulkSlotRequest creates a whole floor's worth of slots at once — the
+// practical way to "add a floor" since floors aren't a standalone entity,
+// just a shared `floor` value on a group of slots.
+type BulkSlotRequest struct {
+	Floor      string `json:"floor" binding:"required"`
+	Zone       string `json:"zone" binding:"required"`
+	Type       string `json:"type"`
+	Count      int    `json:"count" binding:"required,gt=0,lte=200"`
+	Prefix     string `json:"prefix"`
+	LocationID string `json:"location_id"`
+}
+
 // Vehicle represents a registered vehicle
 type Vehicle struct {
 	ID          string    `json:"id"`
@@ -203,6 +225,36 @@ type DashboardStats struct {
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
+}
+
+// ForgotPasswordRequest starts a password reset
+type ForgotPasswordRequest struct {
+	Email string `json:"email" binding:"required,email"`
+}
+
+// ResetPasswordRequest completes a password reset
+type ResetPasswordRequest struct {
+	Token       string `json:"token" binding:"required"`
+	NewPassword string `json:"new_password" binding:"required,min=6"`
+}
+
+// RefreshTokenRequest exchanges a refresh token for a new access token
+type RefreshTokenRequest struct {
+	RefreshToken string `json:"refresh_token" binding:"required"`
+}
+
+// AuditLog represents a recorded user action
+type AuditLog struct {
+	ID          string    `json:"id"`
+	UserID      *string   `json:"user_id"`
+	UserName    string    `json:"user_name"`
+	UserEmail   string    `json:"user_email"`
+	Action      string    `json:"action"`
+	EntityType  string    `json:"entity_type"`
+	EntityID    string    `json:"entity_id"`
+	Description string    `json:"description"`
+	IPAddress   string    `json:"ip_address"`
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // VehicleEntryRequest for entry processing

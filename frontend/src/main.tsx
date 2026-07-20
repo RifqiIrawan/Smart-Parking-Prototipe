@@ -18,6 +18,9 @@ import { Simulator } from './pages/Simulator';
 import { LocationsPage } from './pages/Locations';
 import { SuperAdminLocationsPage } from './pages/SuperAdminLocations';
 import { BillingPage } from './pages/Billing';
+import { AuditLogPage } from './pages/AuditLog';
+import { ForgotPasswordPage } from './pages/ForgotPassword';
+import { ResetPasswordPage } from './pages/ResetPassword';
 import './index.css';
 
 // lazy import pages from pull
@@ -48,7 +51,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             style: { background: '#1e293b', color: '#f1f5f9', border: '1px solid #334155' },
           }} />
           <Routes>
-            <Route path="/login" element={<LoginPage />} />
+            <Route path="/login"           element={<LoginPage />} />
+            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+            <Route path="/reset-password"  element={<ResetPasswordPage />} />
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             <Route element={<PrivateRoute><Layout /></PrivateRoute>}>
               <Route path="/dashboard"    element={<DashboardPage />} />
@@ -64,6 +69,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/locations"    element={<LocationsPage />} />
               <Route path="/master-lokasi" element={<SuperAdminLocationsPage />} />
               <Route path="/billing"      element={<BillingPage />} />
+              <Route path="/audit-log"    element={<AuditLogPage />} />
               <Route path="/simulator"    element={<Simulator />} />
             </Route>
           </Routes>

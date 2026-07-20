@@ -2,8 +2,10 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 
+	"github.com/RifqiIrawan/smart-parking/backend/config"
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
 )
@@ -56,6 +58,7 @@ func (h *TariffHandler) CreateTariff(c *gin.Context) {
 		return
 	}
 
+	config.LogAudit(h.DB, c, "CREATE", "tariff", t.ID, fmt.Sprintf("Tarif %s dibuat", t.VehicleType))
 	c.JSON(http.StatusCreated, models.APIResponse{Success: true, Message: "Tarif berhasil dibuat", Data: t})
 }
 
@@ -84,5 +87,6 @@ func (h *TariffHandler) UpdateTariff(c *gin.Context) {
 		return
 	}
 
+	config.LogAudit(h.DB, c, "UPDATE", "tariff", id, "Tarif diperbarui")
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Tarif berhasil diperbarui"})
 }

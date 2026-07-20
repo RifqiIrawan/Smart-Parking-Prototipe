@@ -2,9 +2,11 @@ package handlers
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/RifqiIrawan/smart-parking/backend/config"
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
 )
@@ -71,6 +73,7 @@ func (h *MemberHandler) CreateMember(c *gin.Context) {
 		return
 	}
 
+	config.LogAudit(h.DB, c, "CREATE", "member", m.ID, fmt.Sprintf("Member %s (%s) didaftarkan", m.MemberName, m.PlateNumber))
 	c.JSON(http.StatusCreated, models.APIResponse{Success: true, Message: "Member berhasil didaftarkan", Data: m})
 }
 
@@ -105,6 +108,7 @@ func (h *MemberHandler) UpdateMember(c *gin.Context) {
 		return
 	}
 
+	config.LogAudit(h.DB, c, "UPDATE", "member", id, fmt.Sprintf("Member %s diperbarui", req.MemberName))
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Member berhasil diperbarui"})
 }
 
@@ -120,5 +124,6 @@ func (h *MemberHandler) DeleteMember(c *gin.Context) {
 		c.JSON(http.StatusNotFound, models.APIResponse{Success: false, Message: "Member tidak ditemukan"})
 		return
 	}
+	config.LogAudit(h.DB, c, "DELETE", "member", id, "Member dinonaktifkan")
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Member dinonaktifkan"})
 }

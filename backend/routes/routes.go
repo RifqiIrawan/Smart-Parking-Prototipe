@@ -35,16 +35,25 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	userH     := handlers.NewUserHandler(db)
 	locationH := handlers.NewLocationHandler(db)
 	billingH  := handlers.NewBillingHandler(db)
+	auditH    := handlers.NewAuditHandler(db)
+	slotH     := handlers.NewSlotHandler(db)
 
 	// ── Public ──
 	r.POST("/api/login",            authH.Login)
+	r.POST("/api/forgot-password",  authH.ForgotPassword)
+	r.POST("/api/reset-password",   authH.ResetPassword)
+	r.POST("/api/refresh-token",    authH.RefreshToken)
 	r.POST("/api/payment/callback", paymentH.Callback)
 
 	// ── Protected ──
 	api := r.Group("/api")
 	api.Use(middleware.AuthMiddleware())
 	{
-		api.GET("/me", authH.Me)
+		api.GET("/me",         authH.Me)
+		api.POST("/logout",    authH.Logout)
+
+		// ── Audit log: super_admin + admin only ──
+		api.GET("/audit-logs", middleware.RequireRole("super_admin", "admin"), auditH.ListAuditLogs)
 
 		// ── Locations: admin + super_admin full CRUD ──
 		api.GET("/locations",         locationH.ListLocations)
@@ -91,7 +100,12 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		api.GET("/billing/active", billingH.ListBillingActive)
 
 		// ── Slots & Reports ──
-		api.GET("/slots",   userH.GetSlots)
+		api.GET("/slots",        userH.GetSlots)
+		api.GET("/slots/floors", slotH.ListFloors)
+		api.POST("/slots",       middleware.RequireRole("super_admin", "admin"), slotH.CreateSlot)
+		api.POST("/slots/bulk",  middleware.RequireRole("super_admin", "admin"), slotH.CreateSlotsBulk)
+		api.PUT("/slots/:id",    middleware.RequireRole("super_admin", "admin"), slotH.UpdateSlot)
+		api.DELETE("/slots/:id", middleware.RequireRole("super_admin", "admin"), slotH.DeleteSlot)
 		api.GET("/reports", userH.GetReports)
 	}
 

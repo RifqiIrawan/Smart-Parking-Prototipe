@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/RifqiIrawan/smart-parking/backend/config"
+	"github.com/RifqiIrawan/smart-parking/backend/middleware"
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
 	"github.com/xuri/excelize/v2"
@@ -73,6 +75,8 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
+	config.LogAudit(h.DB, c, "CREATE", "user", userID, fmt.Sprintf("User %s (%s) dibuat", body.Name, body.Email))
+
 	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
 		Message: "User created",
@@ -100,6 +104,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: err.Error()})
 		return
 	}
+	config.LogAudit(h.DB, c, "UPDATE", "user", id, fmt.Sprintf("User %s diperbarui", body.Name))
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "User updated"})
 }
 
@@ -113,27 +118,41 @@ func (h *UserHandler) DeleteUser(c *gin.Context) {
 	}
 
 	h.DB.Exec(`UPDATE users SET is_active=false WHERE id=$1`, id)
+	config.LogAudit(h.DB, c, "DELETE", "user", id, "User dinonaktifkan")
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "User deactivated"})
 }
 
 func (h *UserHandler) GetSlots(c *gin.Context) {
 	status := c.DefaultQuery("status", "")
 	zone := c.DefaultQuery("zone", "")
+	locID, isSuper := middleware.GetLocationFilter(c)
 
-	query := `SELECT id, slot_number, floor, zone, type, status FROM parking_slots WHERE 1=1`
+	query := `
+		SELECT s.id, s.slot_number, s.floor, s.zone, s.type, s.status,
+		       s.location_id, COALESCE(l.name, '') AS location_name
+		FROM parking_slots s
+		LEFT JOIN locations l ON l.id = s.location_id
+		WHERE 1=1
+	`
 	args := []interface{}{}
 	i := 1
 
 	if status != "" {
-		query += ` AND status = $` + string(rune('0'+i))
+		query += fmt.Sprintf(" AND s.status = $%d", i)
 		args = append(args, status)
 		i++
 	}
 	if zone != "" {
-		query += ` AND zone = $` + string(rune('0'+i))
+		query += fmt.Sprintf(" AND s.zone = $%d", i)
 		args = append(args, zone)
+		i++
 	}
-	query += " ORDER BY zone, slot_number"
+	if !isSuper && locID != nil {
+		query += fmt.Sprintf(" AND s.location_id = $%d", i)
+		args = append(args, *locID)
+		i++
+	}
+	query += " ORDER BY s.floor, s.zone, s.slot_number"
 
 	rows, _ := h.DB.Query(query, args...)
 	if rows != nil {
@@ -144,7 +163,7 @@ func (h *UserHandler) GetSlots(c *gin.Context) {
 	if rows != nil {
 		for rows.Next() {
 			var s models.ParkingSlot
-			rows.Scan(&s.ID, &s.SlotNumber, &s.Floor, &s.Zone, &s.Type, &s.Status)
+			rows.Scan(&s.ID, &s.SlotNumber, &s.Floor, &s.Zone, &s.Type, &s.Status, &s.LocationID, &s.LocationName)
 			slots = append(slots, s)
 		}
 	}

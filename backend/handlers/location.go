@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/RifqiIrawan/smart-parking/backend/config"
 	"github.com/RifqiIrawan/smart-parking/backend/middleware"
 	"github.com/RifqiIrawan/smart-parking/backend/models"
 	"github.com/gin-gonic/gin"
@@ -27,7 +28,7 @@ func (h *LocationHandler) ListLocations(c *gin.Context) {
 
 	if isSuper {
 		rows, err = h.DB.Query(`
-			SELECT l.id, l.name, l.code, l.address, l.city, l.phone, l.email,
+			SELECT l.id, l.name, l.code, l.address, l.city, l.phone, COALESCE(l.email, ''),
 			       l.capacity, l.is_active, l.created_at, l.updated_at,
 			       COUNT(s.id) FILTER (WHERE s.status='available') AS active_slots,
 			       COUNT(s.id) FILTER (WHERE s.status='occupied')  AS occupied_slots
@@ -38,7 +39,7 @@ func (h *LocationHandler) ListLocations(c *gin.Context) {
 		`)
 	} else {
 		rows, err = h.DB.Query(`
-			SELECT l.id, l.name, l.code, l.address, l.city, l.phone, l.email,
+			SELECT l.id, l.name, l.code, l.address, l.city, l.phone, COALESCE(l.email, ''),
 			       l.capacity, l.is_active, l.created_at, l.updated_at,
 			       COUNT(s.id) FILTER (WHERE s.status='available') AS active_slots,
 			       COUNT(s.id) FILTER (WHERE s.status='occupied')  AS occupied_slots
@@ -81,7 +82,7 @@ func (h *LocationHandler) GetLocation(c *gin.Context) {
 
 	var loc models.Location
 	err := h.DB.QueryRow(`
-		SELECT id, name, code, address, city, phone, email,
+		SELECT id, name, code, address, city, phone, COALESCE(email, ''),
 		       capacity, is_active, created_at, updated_at
 		FROM locations WHERE id = $1
 	`, id).Scan(
@@ -115,6 +116,7 @@ func (h *LocationHandler) CreateLocation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Gagal membuat lokasi", Error: err.Error()})
 		return
 	}
+	config.LogAudit(h.DB, c, "CREATE", "location", loc.ID, fmt.Sprintf("Lokasi %s (%s) dibuat", loc.Name, loc.Code))
 	c.JSON(http.StatusCreated, models.APIResponse{Success: true, Message: "Lokasi berhasil dibuat", Data: loc})
 }
 
@@ -138,6 +140,7 @@ func (h *LocationHandler) UpdateLocation(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, models.APIResponse{Success: false, Message: "Gagal update lokasi", Error: err.Error()})
 		return
 	}
+	config.LogAudit(h.DB, c, "UPDATE", "location", id, fmt.Sprintf("Lokasi %s diperbarui", req.Name))
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: fmt.Sprintf("Lokasi %s berhasil diupdate", id)})
 }
 
@@ -156,6 +159,7 @@ func (h *LocationHandler) DeleteLocation(c *gin.Context) {
 	}
 
 	h.DB.Exec(`UPDATE locations SET is_active=false, updated_at=NOW() WHERE id=$1`, id)
+	config.LogAudit(h.DB, c, "DELETE", "location", id, "Lokasi dinonaktifkan")
 	c.JSON(http.StatusOK, models.APIResponse{Success: true, Message: "Lokasi dinonaktifkan"})
 }
 

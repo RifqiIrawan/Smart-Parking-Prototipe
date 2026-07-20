@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Car, Lock, Mail, AlertCircle } from 'lucide-react';
 import { useAuth } from '../store/auth';
 
@@ -129,7 +129,12 @@ export const LoginPage: React.FC = () => {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Password</label>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label className="form-label">Password</label>
+                <Link to="/forgot-password" style={{ fontSize: 12, color: 'var(--accent-cyan)', textDecoration: 'none' }}>
+                  Lupa password?
+                </Link>
+              </div>
               <div style={{ position: 'relative' }}>
                 <Lock size={16} style={{
                   position: 'absolute', left: 12, top: '50%',

@@ -26,6 +26,8 @@ export interface ParkingSlot {
   zone: string;
   type: 'regular' | 'vip' | 'handicap' | 'motorcycle';
   status: 'available' | 'occupied' | 'reserved' | 'maintenance';
+  location_id?: string | null;
+  location_name?: string;
 }
 
 export interface Transaction {

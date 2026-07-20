@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import apiClient from '../api/client';
+import apiClient, { logoutApi } from '../api/client';
 
 interface User {
   id: string;
@@ -38,15 +38,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const login = async (email: string, password: string) => {
     const res = await apiClient.post('/login', { email, password });
-    const { token: t, user: u } = res.data.data;
+    const { token: t, refresh_token, user: u } = res.data.data;
     localStorage.setItem('token', t);
+    localStorage.setItem('refresh_token', refresh_token);
     apiClient.defaults.headers.common['Authorization'] = `Bearer ${t}`;
     setToken(t);
     setUser(u);
   };
 
   const logout = () => {
+    const refreshToken = localStorage.getItem('refresh_token') || undefined;
+    logoutApi(refreshToken).catch(() => { /* best-effort: still clear local session */ });
     localStorage.removeItem('token');
+    localStorage.removeItem('refresh_token');
     delete apiClient.defaults.headers.common['Authorization'];
     setToken(null);
     setUser(null);
