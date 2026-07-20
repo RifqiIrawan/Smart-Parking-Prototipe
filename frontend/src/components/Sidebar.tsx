@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, Car, LogOut as LogOutIcon, DoorOpen,
   Receipt, Users, BarChart3, ParkingSquare, LogIn, Zap,
-  MapPin, CreditCard, UserCheck,
+  MapPin, CreditCard, UserCheck, Shield,
 } from 'lucide-react';
 import { useAuth } from '../store/auth';
 
@@ -19,6 +19,7 @@ const navItems = [
   { to: '/reports',      icon: BarChart3,       label: 'Laporan',           roles: [] },
   { to: '/users',        icon: Users,           label: 'Manajemen User',    roles: ['super_admin','admin'] },
   { to: '/locations',    icon: MapPin,          label: 'Lokasi',            roles: ['super_admin','admin'] },
+  { to: '/master-lokasi', icon: Shield,          label: 'Master Lokasi',    roles: ['super_admin'] },
 ];
 
 const simulatorItem = { to: '/simulator', icon: Zap, label: 'Simulator' };
