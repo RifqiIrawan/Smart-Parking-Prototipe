@@ -73,10 +73,12 @@ func RequireRole(roles ...string) gin.HandlerFunc {
 	}
 }
 
-// IsSuperAdmin returns true when the caller is super_admin.
+// IsSuperAdmin returns true when the caller is super_admin OR admin.
+// Both roles have full visibility across all locations.
 func IsSuperAdmin(c *gin.Context) bool {
 	role, _ := c.Get("role")
-	return role.(string) == "super_admin"
+	r, _ := role.(string)
+	return r == "super_admin" || r == "admin"
 }
 
 // GetLocationFilter returns (locationID *string, isSuperAdmin bool).

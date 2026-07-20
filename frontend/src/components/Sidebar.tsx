@@ -15,7 +15,7 @@ const navItems = [
   { to: '/gates',        icon: DoorOpen,        label: 'Gate Monitor',      roles: [] },
   { to: '/transactions', icon: Receipt,         label: 'Transaksi',         roles: [] },
   { to: '/members',      icon: UserCheck,       label: 'Member',            roles: [] },
-  { to: '/tariffs',      icon: CreditCard,      label: 'Tarif',             roles: ['super_admin','admin'] },
+  { to: '/tariffs',      icon: CreditCard,      label: 'Tarif',             roles: ['super_admin','admin','operator'] },
   { to: '/reports',      icon: BarChart3,       label: 'Laporan',           roles: [] },
   { to: '/users',        icon: Users,           label: 'Manajemen User',    roles: ['super_admin','admin'] },
   { to: '/locations',    icon: MapPin,          label: 'Lokasi',            roles: ['super_admin','admin'] },
@@ -39,8 +39,10 @@ export const Sidebar: React.FC = () => {
     textDecoration: 'none', transition: 'all 0.15s',
   });
 
+  // admin has full access to all menu items
+  const isFullAdmin = role === 'super_admin' || role === 'admin';
   const visibleItems = navItems.filter(item =>
-    item.roles.length === 0 || item.roles.includes(role)
+    isFullAdmin || item.roles.length === 0 || item.roles.includes(role)
   );
 
   return (
@@ -69,23 +71,27 @@ export const Sidebar: React.FC = () => {
         {/* Location badge */}
         <div style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          background: isSuperAdmin ? '#f59e0b10' : '#38bdf810',
-          border: `1px solid ${isSuperAdmin ? '#f59e0b30' : '#38bdf830'}`,
+          background: role === 'super_admin' ? '#f59e0b10' : isSuperAdmin ? '#22c55e10' : '#38bdf810',
+          border: `1px solid ${role === 'super_admin' ? '#f59e0b30' : isSuperAdmin ? '#22c55e30' : '#38bdf830'}`,
           borderRadius: 6, padding: '4px 8px',
         }}>
-          <MapPin size={11} color={isSuperAdmin ? '#f59e0b' : '#38bdf8'} />
+          <MapPin size={11} color={role === 'super_admin' ? '#f59e0b' : isSuperAdmin ? '#22c55e' : '#38bdf8'} />
           <span style={{
             fontSize: 10, fontWeight: 600, whiteSpace: 'nowrap',
             overflow: 'hidden', textOverflow: 'ellipsis',
-            color: isSuperAdmin ? '#f59e0b' : '#38bdf8',
+            color: role === 'super_admin' ? '#f59e0b' : isSuperAdmin ? '#22c55e' : '#38bdf8',
           }}>
             {locationLabel}
           </span>
           {isSuperAdmin && (
             <span style={{
-              fontSize: 8, background: '#f59e0b', color: '#000',
+              fontSize: 8,
+              background: role === 'super_admin' ? '#f59e0b' : '#22c55e',
+              color: '#000',
               padding: '1px 4px', borderRadius: 3, fontWeight: 700, marginLeft: 'auto',
-            }}>SUPER</span>
+            }}>
+              {role === 'super_admin' ? 'SUPER' : 'ADMIN'}
+            </span>
           )}
         </div>
       </div>
@@ -120,8 +126,10 @@ export const Sidebar: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <div style={{
             width: 30, height: 30, borderRadius: '50%',
-            background: isSuperAdmin
+            background: role === 'super_admin'
               ? 'linear-gradient(135deg, #f59e0b, #ef4444)'
+              : role === 'admin'
+              ? 'linear-gradient(135deg, #22c55e, #38bdf8)'
               : 'linear-gradient(135deg, #38bdf8, #818cf8)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 12, fontWeight: 700, color: '#0a0e1a',
@@ -133,7 +141,7 @@ export const Sidebar: React.FC = () => {
               {user?.name}
             </div>
             <div style={{ fontSize: 10, color: '#64748b' }}>
-              {role === 'super_admin' ? '⭐ Super Admin' : role}
+              {role === 'super_admin' ? '⭐ Super Admin' : role === 'admin' ? '🔑 Admin' : role}
             </div>
           </div>
         </div>

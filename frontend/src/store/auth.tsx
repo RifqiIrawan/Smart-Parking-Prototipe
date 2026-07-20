@@ -52,7 +52,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(null);
   };
 
-  const isSuperAdmin = user?.role_name === 'super_admin';
+  // admin has the same full access as super_admin
+  const isSuperAdmin = user?.role_name === 'super_admin' || user?.role_name === 'admin';
 
   const locationLabel = isSuperAdmin
     ? 'Semua Lokasi'
