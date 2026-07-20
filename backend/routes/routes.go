@@ -34,6 +34,7 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 	paymentH  := handlers.NewPaymentHandler(db)
 	userH     := handlers.NewUserHandler(db)
 	locationH := handlers.NewLocationHandler(db)
+	billingH  := handlers.NewBillingHandler(db)
 
 	// ── Public ──
 	r.POST("/api/login",            authH.Login)
@@ -84,6 +85,10 @@ func SetupRouter(db *sql.DB) *gin.Engine {
 		api.PUT("/users/:id",  middleware.RequireRole("super_admin", "admin"), userH.UpdateUser)
 		api.DELETE("/users/:id", middleware.RequireRole("super_admin", "admin"), userH.DeleteUser)
 		api.GET("/roles",      userH.ListRoles)
+
+		// ── Billing ──
+		api.GET("/billing/check",  billingH.CheckBilling)
+		api.GET("/billing/active", billingH.ListBillingActive)
 
 		// ── Slots & Reports ──
 		api.GET("/slots",   userH.GetSlots)

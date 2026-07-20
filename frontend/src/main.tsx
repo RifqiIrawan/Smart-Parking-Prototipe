@@ -17,6 +17,7 @@ import { ReportsPage } from './pages/Reports';
 import { Simulator } from './pages/Simulator';
 import { LocationsPage } from './pages/Locations';
 import { SuperAdminLocationsPage } from './pages/SuperAdminLocations';
+import { BillingPage } from './pages/Billing';
 import './index.css';
 
 // lazy import pages from pull
@@ -62,6 +63,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
               <Route path="/users"        element={<UsersPage />} />
               <Route path="/locations"    element={<LocationsPage />} />
               <Route path="/master-lokasi" element={<SuperAdminLocationsPage />} />
+              <Route path="/billing"      element={<BillingPage />} />
               <Route path="/simulator"    element={<Simulator />} />
             </Route>
           </Routes>
